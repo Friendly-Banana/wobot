@@ -38,33 +38,75 @@ pub(crate) async fn cruisine(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// mark your position in the mensa
-/// or play battleship
-#[poise::command(slash_command, prefix_command)]
-pub(crate) async fn add(
-    ctx: Context<'_>,
-    #[description = "Letter Number (without space)"] mut position: String,
-    #[description = "Time until your position disappears. Use 0 to delete your marker, Default 1 hour"]
-    expires: Option<String>,
-) -> Result<(), Error> {
-    ctx.defer().await?;
-
+fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     if position.len() < 2 || position.len() > 3 {
         return Err(anyhow!("Bad position format, 2-3 characters").into());
     }
-    position.make_ascii_uppercase();
-    let mut chars = position.chars();
-    let letter = chars.next().unwrap();
-    let number = str::parse::<u8>(chars.as_str());
+
+    let position = position.to_ascii_uppercase();
+    let mut chars : Vec<char> = position.chars().collect();
+
+    let letter = if chars[0].is_ascii_alphabetic() {
+        chars.remove(0)
+    } else if chars.last().unwrap().is_ascii_alphabetic() {
+        chars.pop().unwrap()
+    } else {
+        return Err(anyhow!("Bad position format, no letter").into());
+    };
+
+    let number = str::parse::<u8>(&chars.into_iter().collect::<String>())?;
+
     if letter < MIN_X
         || letter > MAX_X
-        || !number.as_ref().is_ok_and(|n| n >= &MIN_Y && n <= &MAX_Y)
+        || number < MIN_Y || number > MAX_Y
     {
         return Err(anyhow!(
             "Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}"
         )
         .into());
     }
+
+    Ok((letter, number))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_cruisine_letters;
+
+    #[test]
+    fn test_parse_cruisine_letters() {
+        for x in 'A'..='J' {
+            for y in 1..=10 {
+                let pos = format!("{}{}", x, y);
+                assert_eq!(parse_cruisine_letters(&pos).unwrap(), (x, y));
+
+                let pos_reverse = format!("{}{}", y, x);
+                assert_eq!(parse_cruisine_letters(&pos_reverse).unwrap(), (x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn test_reject_invalid_cruisine_letters() {
+        assert!(parse_cruisine_letters("A11").is_err());
+        assert!(parse_cruisine_letters("K5").is_err());
+        assert!(parse_cruisine_letters("A").is_err());
+        assert!(parse_cruisine_letters("10").is_err());
+    }
+}
+
+/// mark your position in the mensa
+/// or play battleship
+#[poise::command(slash_command, prefix_command)]
+pub(crate) async fn add(
+    ctx: Context<'_>,
+    #[description = "Letter Number (without space)"] position: String,
+    #[description = "Time until your position disappears. Use 0 to delete your marker, Default 1 hour"]
+    expires: Option<String>,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+
+    let (letter, number) = parse_cruisine_letters(&position)?;
 
     let duration = match expires {
         Some(x) => Duration::from_std(parse_duration::parse(x.as_str())?)?,
@@ -89,7 +131,7 @@ pub(crate) async fn add(
 
     let pos = MensaPosition {
         x: letter as u8 - MIN_X as u8,
-        y: number.unwrap() - MIN_Y,
+        y: number - MIN_Y,
         expires: Utc::now().add(duration),
     };
     {
