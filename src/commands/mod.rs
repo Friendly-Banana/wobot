@@ -1,7 +1,7 @@
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
-use poise::serenity_prelude::{AttachmentType, CreateEmbed};
-use poise::ReplyHandle;
+use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
+use poise::{CreateReply, ReplyHandle};
 
 use crate::{Context, Error};
 
@@ -37,15 +37,25 @@ pub(crate) fn link_message(guild_id: u64, channel_id: u64, msg_id: u64) -> Strin
 macro_rules! link_msg {
     ($guild_id:expr, $channel_id:expr, $msg_id:expr) => {{
         use crate::commands::link_message;
-        link_message($guild_id.context("guild_only")?.0, $channel_id.0, $msg_id.0)
+        link_message(
+            $guild_id.context("guild_only")?.get(),
+            $channel_id.get(),
+            $msg_id.get(),
+        )
     }};
 }
 
 #[macro_export]
 macro_rules! done {
     ($ctx:expr) => {
-        $ctx.send(|m| m.content("Done✅").ephemeral(true).reply(true))
-            .await?;
+        use poise::CreateReply;
+        $ctx.send(
+            CreateReply::default()
+                .content("Done✅")
+                .ephemeral(true)
+                .reply(true),
+        )
+        .await?;
         return Ok(());
     };
 }
@@ -55,16 +65,14 @@ pub(crate) async fn remove_components_but_keep_embeds(
     reply: ReplyHandle<'_>,
 ) -> Result<(), Error> {
     let emoji_embeds = reply.message().await?;
-    reply
-        .edit(ctx, |m| {
-            m.embeds = emoji_embeds
-                .embeds
-                .iter()
-                .map(|e| CreateEmbed::from(e.clone()))
-                .collect();
-            m.components(|c| c)
-        })
-        .await?;
+    let mut m = CreateReply::default();
+    m.embeds = emoji_embeds
+        .embeds
+        .to_owned()
+        .into_iter()
+        .map(|e| CreateEmbed::from(e))
+        .collect();
+    reply.edit(ctx, m).await?;
     Ok(())
 }
 
@@ -72,12 +80,7 @@ async fn send_image(ctx: Context<'_>, img: DynamicImage, filename: String) -> Re
     let mut output_bytes: Vec<u8> = Vec::new();
     img.write_with_encoder(PngEncoder::new(&mut output_bytes))?;
 
-    ctx.send(|m| {
-        m.attachment(AttachmentType::Bytes {
-            data: output_bytes.into(),
-            filename,
-        })
-    })
-    .await?;
+    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(output_bytes, filename)))
+        .await?;
     Ok(())
 }

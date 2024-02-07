@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+
 use poise::serenity_prelude::{Colour, CreateSelectMenuOption, ReactionType};
 
 use self::FeatureState::*;
@@ -13,11 +15,21 @@ pub(crate) enum FeatureState {
 }
 
 impl FeatureState {
-    pub(crate) fn menu(
-        state: FeatureState,
-        m: &mut CreateSelectMenuOption,
-    ) -> &mut CreateSelectMenuOption {
-        m.label(state.to_string()).value(state as u32).emoji(state)
+    pub(crate) fn menu(state: FeatureState) -> CreateSelectMenuOption {
+        CreateSelectMenuOption::new(state.to_string(), (state as i64).to_string())
+            .emoji(ReactionType::from(state))
+    }
+}
+
+impl Display for FeatureState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            All => write!(f, "All"),
+            ToDo => write!(f, "To Do"),
+            Implemented => write!(f, "Implemented"),
+            Rejected => write!(f, "Rejected"),
+            Postponed => write!(f, "Postponed"),
+        }
     }
 }
 

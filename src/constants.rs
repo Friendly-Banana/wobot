@@ -10,7 +10,6 @@ use rusttype::Font;
 use tracing::info;
 
 pub(crate) const TIMEZONE: Tz = Berlin;
-pub(crate) const TIME_INPUT_FORMAT: &str = "%Y%m%dT%H%M%SZ";
 
 pub(crate) const WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
 pub(crate) const FONT_PATH: &str = "assets/Rockwill.ttf";

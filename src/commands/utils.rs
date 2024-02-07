@@ -1,9 +1,37 @@
 use anyhow::Context as _;
 use image::DynamicImage;
-use poise::serenity_prelude::User;
+use poise::serenity_prelude::{Colour, User};
+use rand::prelude::SliceRandom;
+use rand::thread_rng;
 
 use crate::constants::HTTP_CLIENT;
 use crate::{Context, Error};
+
+const COLORS: [Colour; 19] = [
+    Colour::BLURPLE,
+    Colour::DARK_GOLD,
+    Colour::DARK_GREEN,
+    Colour::BLITZ_BLUE,
+    Colour::DARK_PURPLE,
+    Colour::DARK_RED,
+    Colour::DARK_TEAL,
+    Colour::GOLD,
+    Colour::MAGENTA,
+    Colour::BLUE,
+    Colour::ORANGE,
+    Colour::PURPLE,
+    Colour::RED,
+    Colour::ROSEWATER,
+    Colour::TEAL,
+    Colour::BLITZ_BLUE,
+    Colour::MEIBE_PINK,
+    Colour::MAGENTA,
+    Colour::FOOYOO,
+];
+
+pub(crate) fn random_color() -> Colour {
+    *COLORS.choose(&mut thread_rng()).unwrap()
+}
 
 pub(crate) async fn load_avatar(ctx: &Context<'_>, user: &User) -> Result<DynamicImage, Error> {
     let cached = {

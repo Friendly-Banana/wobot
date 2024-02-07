@@ -1,6 +1,6 @@
 use std::string::ToString;
 
-use poise::serenity_prelude::{Activity, ActivityType, Message, ReactionType, ShardId};
+use poise::serenity_prelude::{ActivityData, Message, ReactionType};
 
 use crate::{done, Context, Error};
 
@@ -26,9 +26,9 @@ pub(crate) async fn register_commands(ctx: Context<'_>) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command, owners_only)]
 pub(crate) async fn latency(ctx: Context<'_>) -> Result<(), Error> {
-    let manager = ctx.framework().shard_manager.lock().await;
+    let manager = ctx.framework().shard_manager.clone();
     let runners = manager.runners.lock().await;
-    let id = ShardId(ctx.serenity_context().shard_id);
+    let id = ctx.serenity_context().shard_id;
 
     match runners.get(&id).and_then(|r| r.latency) {
         None => ctx.say("No shard or latency found").await?,
@@ -68,8 +68,9 @@ pub(crate) async fn react(
     done!(ctx);
 }
 
-#[derive(poise::ChoiceParameter)]
+#[derive(poise::ChoiceParameter, PartialEq)]
 pub(crate) enum ActivityChoice {
+    Unset,
     Playing,
     Listening,
     Watching,
@@ -87,22 +88,19 @@ pub(crate) async fn activity(
     #[description = "stream url if Streaming or details if Custom"] details: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
+
     let activity = match activity {
-        ActivityChoice::Playing => Activity::playing(action),
-        ActivityChoice::Listening => Activity::listening(action),
-        ActivityChoice::Watching => Activity::watching(action),
-        ActivityChoice::Competing => Activity::competing(action),
-        ActivityChoice::Streaming => Activity::streaming(
+        ActivityChoice::Unset => None,
+        ActivityChoice::Playing => Some(ActivityData::playing(action)),
+        ActivityChoice::Listening => Some(ActivityData::listening(action)),
+        ActivityChoice::Watching => Some(ActivityData::watching(action)),
+        ActivityChoice::Competing => Some(ActivityData::competing(action)),
+        ActivityChoice::Streaming => Some(ActivityData::streaming(
             action,
             details.unwrap_or("https://www.twitch.tv/".to_string()),
-        ),
-        ActivityChoice::Custom => {
-            let mut activity = Activity::from(Activity::playing(action));
-            activity.kind = ActivityType::Custom;
-            activity.details = details;
-            activity
-        }
+        )?),
+        ActivityChoice::Custom => Some(ActivityData::custom(details.unwrap_or("".to_string()))),
     };
-    ctx.serenity_context().set_activity(activity).await;
+    ctx.serenity_context().set_activity(activity);
     done!(ctx);
 }

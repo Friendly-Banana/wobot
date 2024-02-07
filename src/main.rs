@@ -5,13 +5,15 @@ use std::sync::RwLock;
 
 use anyhow::Context as _;
 use image::DynamicImage;
-use poise::serenity_prelude::{ChannelId, Colour, GatewayIntents, GuildId, ReactionType, UserId};
+use poise::serenity_prelude::{
+    ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
+};
 use poise::{Framework, PrefixFrameworkOptions};
 use regex::Regex;
 use serde::Deserialize;
-use shuttle_poise::ShuttlePoise;
 use shuttle_runtime::CustomError;
 use shuttle_secrets::SecretStore;
+use shuttle_serenity::ShuttleSerenity;
 use sqlx::{query, PgPool};
 use tracing::{debug, info};
 
@@ -66,18 +68,13 @@ async fn poise(
     #[shuttle_secrets::Secrets] secret_store: SecretStore,
     #[shuttle_shared_db::Postgres(local_uri = "postgres://test:pass@localhost:5432/postgres")]
     pool: PgPool,
-) -> ShuttlePoise<Data, Error> {
+) -> ShuttleSerenity {
     let discord_token = secret_store
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
 
     let config_data = read_to_string("assets/config.hjson").context("Couldn't load config file")?;
     let config: Config = deser_hjson::from_str(&config_data).context("Bad config")?;
-
-    sqlx::migrate!()
-        .run(&pool)
-        .await
-        .context("Migrations failed")?;
 
     let commands = vec![
         meme(),
@@ -117,14 +114,6 @@ async fn poise(
             },
             ..Default::default()
         })
-        .token(discord_token)
-        .intents(
-            GatewayIntents::GUILD_MESSAGES
-                | GatewayIntents::MESSAGE_CONTENT
-                | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
-                | GatewayIntents::GUILD_MESSAGE_REACTIONS
-                | GatewayIntents::GUILD_SCHEDULED_EVENTS,
-        )
         .setup(move |ctx, ready, framework| {
             Box::pin(async move {
                 info!("{} is connected!", ready.user.name);
@@ -152,9 +141,19 @@ async fn poise(
                 })
             })
         })
-        .build()
-        .await
-        .map_err(CustomError::new)?;
+        .build();
 
-    Ok(framework.into())
+    let client = ClientBuilder::new(
+        discord_token,
+        GatewayIntents::GUILD_MESSAGES
+            | GatewayIntents::MESSAGE_CONTENT
+            | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
+            | GatewayIntents::GUILD_MESSAGE_REACTIONS
+            | GatewayIntents::GUILD_SCHEDULED_EVENTS,
+    )
+    .framework(framework)
+    .await
+    .map_err(CustomError::new)?;
+
+    Ok(client.into())
 }
