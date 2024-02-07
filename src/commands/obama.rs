@@ -4,7 +4,7 @@ use anyhow::Context as _;
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
 use imageproc::drawing::draw_text_mut;
-use poise::serenity_prelude::{AttachmentType, Message};
+use poise::serenity_prelude::{CreateAttachment, CreateMessage, GetMessages, Message};
 use rusttype::Scale;
 use tracing::{debug, info};
 
@@ -23,7 +23,7 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
     debug!("Loading messages");
     let msgs = ctx
         .channel_id()
-        .messages(ctx.http(), |b| b.limit(30))
+        .messages(ctx.http(), GetMessages::new().limit(30))
         .await?;
     for msg in msgs {
         if msg
@@ -52,12 +52,12 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
 
             debug!("Sending obama");
             ctx.channel_id()
-                .send_message(ctx.http(), |m| {
-                    m.reference_message(&msg).add_file(AttachmentType::Bytes {
-                        data: output_bytes.into(),
-                        filename: OBAMA_PATH.to_string(),
-                    })
-                })
+                .send_message(
+                    ctx.http(),
+                    CreateMessage::new()
+                        .reference_message(&msg)
+                        .add_file(CreateAttachment::bytes(output_bytes, OBAMA_PATH)),
+                )
                 .await?;
             done!(ctx);
         }

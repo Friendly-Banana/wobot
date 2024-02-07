@@ -7,10 +7,11 @@ use chrono_tz::Tz;
 use ics::properties::{Description, DtEnd, DtStart, Location, Summary};
 use ics::{Event, ICalendar};
 use image::EncodableLayout;
-use poise::serenity_prelude::{AttachmentType, ReactionType, ScheduledEventType};
-use tracing::error;
+use poise::serenity_prelude::{
+    CreateAttachment, CreateScheduledEvent, CreateThread, ReactionType, ScheduledEventType,
+};
 
-use crate::constants::{TIMEZONE, TIME_INPUT_FORMAT};
+use crate::constants::TIMEZONE;
 use crate::{done, Context, Error};
 
 const EVENT_URL: &str = "https://discord.com/events/";
@@ -18,6 +19,8 @@ const EVENT_URL: &str = "https://discord.com/events/";
 /// Export all events on this server as ICS calendar file
 #[poise::command(slash_command, prefix_command, guild_only)]
 pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
+    const ICS_TIME_FORMAT: &str = "%Y%m%dT%H%M%SZ";
+
     ctx.defer().await?;
     let events = ctx
         .guild_id()
@@ -27,8 +30,8 @@ pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
     let mut calendar = ICalendar::new("2.0", "ics-rs");
     for event in events {
         let mut ics_event = Event::new(
-            event.id.0.to_string(),
-            Utc::now().format(TIME_INPUT_FORMAT).to_string(),
+            event.id.get().to_string(),
+            Utc::now().format(ICS_TIME_FORMAT).to_string(),
         );
 
         ics_event.push(Summary::new(event.name));
@@ -36,16 +39,18 @@ pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
             ics_event.push(Description::new(description));
         }
         if let Some(metadata) = event.metadata {
-            ics_event.push(Location::new(metadata.location));
+            if let Some(loc) = metadata.location {
+                ics_event.push(Location::new(loc));
+            }
         }
         ics_event.push(DtStart::new(
-            event.start_time.format(TIME_INPUT_FORMAT).to_string(),
+            event.start_time.format(ICS_TIME_FORMAT).to_string(),
         ));
         ics_event.push(DtEnd::new(
             event
                 .end_time
                 .unwrap_or(event.start_time.add(Duration::hours(1)).into())
-                .format(TIME_INPUT_FORMAT)
+                .format(ICS_TIME_FORMAT)
                 .to_string(),
         ));
 
@@ -53,12 +58,10 @@ pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
     }
     let mut bytes = Vec::new();
     calendar.write(&mut bytes)?;
-    ctx.send(|r| {
-        r.attachment(AttachmentType::Bytes {
-            filename: "calendar.ics".to_string(),
-            data: Cow::from(bytes.as_bytes()),
-        })
-    })
+    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(
+        Cow::from(bytes.as_bytes()),
+        "calendar.ics".to_string(),
+    )))
     .await?;
     done!(ctx);
 }
@@ -79,20 +82,15 @@ pub(crate) async fn event(
     #[description = "yyyy-mm-dd hh:mm, default start_time + 1h"] end: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let start_date = parse_date(&start, "start")?;
-    let end_date = match end {
-        None => start_date.add(Duration::hours(1)),
-        Some(input) => parse_date(&input, "end")?,
-    };
+    let (start_date, end_date) = parse_start_and_end_date(start, end)?;
     let guild_id = ctx.guild_id().context("guild_only")?;
     let event = guild_id
-        .create_scheduled_event(ctx.http(), |e| {
-            e.kind(ScheduledEventType::External)
-                .name(&name)
+        .create_scheduled_event(
+            ctx.http(),
+            CreateScheduledEvent::new(ScheduledEventType::External, &name, start_date)
                 .location(location)
-                .start_time(start_date)
-                .end_time(end_date)
-        })
+                .end_time(end_date),
+        )
         .await?;
     let announcement = format!(
         "[{}]({}{}/{}) mit {}",
@@ -102,34 +100,71 @@ pub(crate) async fn event(
         event.id,
         ctx.author()
     );
-    let announcement_channel = ctx.data().announcement_channel.get(&guild_id);
-    if announcement_channel.is_none() {
-        error!("No announcement channel configured for guild {guild_id}");
-        return Err(Error::from(format!(
-            "No announcement channel configured for guild {guild_id}"
-        )));
-    };
-    let msg = announcement_channel
-        .unwrap()
-        .say(ctx.http(), announcement)
-        .await?;
+    let announcement_channel = ctx
+        .data()
+        .announcement_channel
+        .get(&guild_id)
+        .with_context(|| format!("No announcement channel configured for guild {guild_id}"))?;
+
+    let msg = announcement_channel.say(ctx.http(), announcement).await?;
     msg.react(ctx.http(), ReactionType::from('👍')).await?;
     msg.react(ctx.http(), ReactionType::from('❔')).await?;
 
     let thread = announcement_channel
-        .unwrap()
-        .create_public_thread(ctx.http(), msg.id, |t| t.name(name))
+        .create_thread_from_message(ctx.http(), msg.id, CreateThread::new(name))
         .await?;
     thread.id.add_thread_member(ctx, ctx.author().id).await?;
     done!(ctx);
 }
 
-fn parse_date(input: &str, name: &str) -> Result<DateTime<Tz>, Error> {
-    match NaiveDateTime::parse_from_str(&input, "%Y-%m-%d %H:%M") {
-        Ok(date) => Ok(date.and_local_timezone(TIMEZONE).unwrap()),
-        Err(e) => {
-            error!("Couldn't parse start time {input}: {e:?}");
-            Err(Error::from(format!("Couldn't parse {name} time")))
-        }
+fn parse_start_and_end_date(
+    start: String,
+    end: Option<String>,
+) -> Result<(DateTime<Tz>, DateTime<Tz>), Error> {
+    const TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M";
+
+    let start_date = NaiveDateTime::parse_from_str(&start, TIME_FORMAT)
+        .map(|date| date.and_local_timezone(TIMEZONE).unwrap())
+        .context("Couldn't parse start time")?;
+    let end_date = match end {
+        None => start_date.add(Duration::hours(1)),
+        Some(input) => NaiveDateTime::parse_from_str(&input, TIME_FORMAT)
+            .map(|date| date.and_local_timezone(TIMEZONE).unwrap())
+            .context("Couldn't parse end time")?,
+    };
+    Ok((start_date, end_date))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_start_and_end_date;
+
+    #[test]
+    fn test_parse_dates() {
+        let (start, end) = parse_start_and_end_date("1970-01-01 00:00".to_string(), None).unwrap();
+        assert_eq!(start.to_rfc3339(), "1970-01-01T00:00:00+01:00");
+        assert_eq!(end.to_rfc3339(), "1970-01-01T01:00:00+01:00");
+
+        let (start, end) = parse_start_and_end_date(
+            "2012-12-31 12:34".to_string(),
+            Some("2013-01-01 21:43".to_string()),
+        )
+        .unwrap();
+        assert_eq!(start.to_rfc3339(), "2012-12-31T12:34:00+01:00");
+        assert_eq!(end.to_rfc3339(), "2013-01-01T21:43:00+01:00");
+    }
+
+    #[test]
+    fn test_reject_invalid_dates() {
+        assert!(parse_start_and_end_date("".to_string(), None).is_err());
+        assert!(
+            parse_start_and_end_date("1970-01-01 00:00".to_string(), Some("".to_string())).is_err()
+        );
+        assert!(parse_start_and_end_date("not a date".to_string(), None).is_err());
+        assert!(parse_start_and_end_date(
+            "1970-01-01 00:00".to_string(),
+            Some("not a date".to_string())
+        )
+        .is_err());
     }
 }

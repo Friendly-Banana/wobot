@@ -1,6 +1,11 @@
 use std::time::Duration;
 
-use poise::serenity_prelude::{CollectComponentInteraction, InteractionResponseType, Timestamp};
+use poise::serenity_prelude::{
+    ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow, CreateButton,
+    CreateEmbed, CreateInteractionResponse, CreateInteractionResponseMessage, CreateSelectMenu,
+    CreateSelectMenuKind, Timestamp,
+};
+use poise::CreateReply;
 use sqlx::PgPool;
 use sqlx::{query, query_as};
 use tracing::{info, warn};
@@ -22,12 +27,16 @@ pub(crate) struct Feature {
 const FEATURES_VIEW_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const PER_PAGE: u64 = 5;
 
-#[poise::command(slash_command, prefix_command, subcommands("list", "add", "update"))]
+#[poise::command(
+    slash_command,
+    prefix_command,
+    subcommands("list", "add", "update", "delete")
+)]
 pub(crate) async fn features(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command, ephemeral)]
+#[poise::command(slash_command, prefix_command)]
 pub(crate) async fn add(ctx: Context<'_>, name: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     info!("{} added feature {}", ctx.author().name, name);
@@ -39,6 +48,16 @@ pub(crate) async fn add(ctx: Context<'_>, name: String) -> Result<(), Error> {
     .execute(&ctx.data().database)
     .await?;
     ctx.say(format!("Added feature {}", name)).await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, owners_only)]
+pub(crate) async fn delete(ctx: Context<'_>, name: String) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    query!("DELETE FROM features WHERE features.name = $1", name)
+        .execute(&ctx.data().database)
+        .await?;
+    ctx.say(format!("Deleted feature {}", name)).await?;
     Ok(())
 }
 
@@ -79,33 +98,30 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let mut feature_count = get_feature_count(&ctx.data().database, state).await?;
     let mut features: Vec<Feature> = get_features(&ctx.data().database, state, offset).await?;
 
-    let reply = ctx
-        .send(|m| {
-            make_feature_embeds(features, state, offset, feature_count, m).components(|b| {
-                b.create_action_row(|b| {
-                    b.create_button(|b| b.custom_id(&prev_button_id).emoji('◀'))
-                        .create_button(|b| b.custom_id(&refresh_button_id).emoji('🔄'))
-                        .create_button(|b| b.custom_id(&next_button_id).emoji('▶'))
-                })
-                .create_action_row(|b| {
-                    b.create_select_menu(|s| {
-                        s.custom_id(&filter_id)
-                            .placeholder("Select a state")
-                            .min_values(1)
-                            .max_values(1)
-                            .options(|menu| {
-                                for state in [All, ToDo, Implemented, Rejected, Postponed] {
-                                    menu.create_option(|o| FeatureState::menu(state, o));
-                                }
-                                menu
-                            })
-                    })
-                })
-            })
-        })
-        .await?;
+    let reply = {
+        let options = [All, ToDo, Implemented, Rejected, Postponed]
+            .map(FeatureState::menu)
+            .to_vec();
+        let components = vec![
+            CreateActionRow::Buttons(vec![
+                CreateButton::new(&prev_button_id).emoji('◀'),
+                CreateButton::new(&refresh_button_id).emoji('🔄'),
+                CreateButton::new(&next_button_id).emoji('▶'),
+            ]),
+            CreateActionRow::SelectMenu(
+                CreateSelectMenu::new(&filter_id, CreateSelectMenuKind::String { options })
+                    .placeholder("Select a state")
+                    .min_values(1)
+                    .max_values(1),
+            ),
+        ];
+        let m = CreateReply::default().components(components);
+        make_feature_embeds(features, state, offset, feature_count, m)
+    };
 
-    while let Some(press) = CollectComponentInteraction::new(ctx)
+    let reply_handle = ctx.send(reply).await?;
+
+    while let Some(press) = ComponentInteractionCollector::new(ctx)
         .channel_id(ctx.channel_id())
         .filter(move |press| press.data.custom_id.starts_with(&ctx_id.to_string()))
         .timeout(FEATURES_VIEW_TIMEOUT)
@@ -124,20 +140,25 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         } else if press.data.custom_id == refresh_button_id {
             feature_count = get_feature_count(db, state).await?;
         } else if press.data.custom_id == filter_id {
-            let new_state = press.data.values[0]
-                .parse::<i64>()
-                .map_or(All, FeatureState::from);
+            let values = match &press.data.kind {
+                ComponentInteractionDataKind::StringSelect { values } => values,
+                _ => return Err(Error::from("invalid select menu interaction")),
+            };
+            let new_state = values[0].parse::<i64>().map_or(All, FeatureState::from);
             if new_state != state {
                 state = new_state;
                 offset = 0;
                 feature_count = get_feature_count(db, state).await?;
             } else {
                 press
-                    .create_interaction_response(ctx.http(), |r| {
-                        r.interaction_response_data(|d| {
-                            d.content("Already showing that state").ephemeral(true)
-                        })
-                    })
+                    .create_response(
+                        ctx.http(),
+                        CreateInteractionResponse::Message(
+                            CreateInteractionResponseMessage::new()
+                                .content("Already showing that state")
+                                .ephemeral(true),
+                        ),
+                    )
                     .await?;
                 continue;
             }
@@ -152,17 +173,21 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         features = get_features(db, state, offset).await?;
 
         // Update the message with the new page contents
+        let message = make_feature_embeds(
+            features,
+            state,
+            offset,
+            feature_count,
+            CreateInteractionResponseMessage::default(),
+        );
         press
-            .create_interaction_response(ctx, |response| {
-                response
-                    .kind(InteractionResponseType::UpdateMessage)
-                    .interaction_response_data(|m| {
-                        make_feature_embeds(features, state, offset, feature_count, m)
-                    })
-            })
+            .create_response(
+                ctx.http(),
+                CreateInteractionResponse::UpdateMessage(message),
+            )
             .await?;
     }
-    remove_components_but_keep_embeds(ctx, reply).await
+    remove_components_but_keep_embeds(ctx, reply_handle).await
 }
 
 fn make_feature_embeds<T: EasyEmbed>(
@@ -170,24 +195,27 @@ fn make_feature_embeds<T: EasyEmbed>(
     state: FeatureState,
     offset: u64,
     pages: u64,
-    reply: &mut T,
-) -> &mut T {
+    mut reply: T,
+) -> T {
     let all = state == All;
+
     if features.is_empty() {
-        reply.easy_embed(|e| {
-            e.title("No features found")
-                .description("No features found")
-        });
+        reply = reply.easy_embed(
+            CreateEmbed::new()
+                .title("No features found")
+                .description("No features found"),
+        );
     }
     for feature in features {
-        reply.easy_embed(|e| {
-            if all {
-                e.description(feature.state);
-            }
+        let mut e = CreateEmbed::new();
+        if all {
+            e = e.description(feature.state.to_string());
+        }
+        reply = reply.easy_embed(
             e.title(feature.name)
                 .timestamp(feature.timestamp)
-                .colour(feature.state)
-        });
+                .colour(feature.state),
+        );
     }
     reply.content(if all {
         format!("**All** Features {}/{}", offset, pages)

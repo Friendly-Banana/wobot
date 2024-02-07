@@ -1,4 +1,4 @@
-use poise::serenity_prelude::Message;
+use poise::serenity_prelude::{GetMessages, Message};
 use tracing::error;
 
 use crate::{Context, Error};
@@ -14,7 +14,7 @@ use crate::{Context, Error};
 )]
 pub(crate) async fn clear(
     ctx: Context<'_>,
-    #[description = "between 2 and 100, default 2"] amount: Option<u64>,
+    #[description = "between 2 and 100, default 2"] amount: Option<u8>,
     #[description = "Message to delete before"] message: Option<Message>,
 ) -> Result<(), Error> {
     let amount = amount.unwrap_or(2);
@@ -22,14 +22,13 @@ pub(crate) async fn clear(
         ctx.say("Amount must be between 2 and 100").await?;
         return Ok(());
     }
+    let mut b = GetMessages::new();
+    if let Some(msg) = message {
+        b = b.before(msg.id);
+    }
     let msgs = ctx
         .channel_id()
-        .messages(ctx.http(), |b| {
-            if let Some(msg) = message {
-                b.before(msg.id);
-            }
-            b.limit(amount)
-        })
+        .messages(ctx.http(), b.limit(amount))
         .await?;
     let actual_amount = msgs.len();
     if actual_amount < 2 {

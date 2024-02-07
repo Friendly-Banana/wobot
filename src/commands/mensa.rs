@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::ops::AddAssign;
 
-use chrono::{Datelike, Duration, Local, Timelike, Utc, Weekday};
+use chrono::{Datelike, Duration, Local, Weekday};
 use itertools::Itertools;
 use percent_encoding::utf8_percent_encode;
-use poise::serenity_prelude::Colour;
+use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
 use serde::Deserialize;
 
-use crate::constants::HTTP_CLIENT;
-use crate::constants::TIMEZONE;
+use crate::commands::utils::random_color;
+use crate::constants::{HTTP_CLIENT, TIMEZONE};
 use crate::{Context, Error};
 
 /// https://tum-dev.github.io/eat-api/docs/
@@ -75,6 +75,8 @@ pub(crate) async fn mensa(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+const DISCORD_FIELDS_ON_AN_EMBED_LIMIT: usize = 25;
+
 /// list all canteens
 #[poise::command(slash_command, prefix_command)]
 async fn list(ctx: Context<'_>) -> Result<(), Error> {
@@ -93,27 +95,28 @@ async fn list(ctx: Context<'_>) -> Result<(), Error> {
         };
     }
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            for canteen in &canteens {
-                let mut description = format!(
-                    "[{}]({})",
-                    canteen.location.address,
-                    link_location(&canteen)
-                );
-                if queue_statuses.contains_key(&canteen.canteen_id) {
-                    let queue_status = queue_statuses.get(&canteen.canteen_id).unwrap();
-                    description.push_str(&format!(
-                        "\nQueue: {} ({:.0}%)",
-                        queue_status.current, queue_status.percent
-                    ));
-                }
-                e.field(&canteen.name, description, true);
+    let mut reply = CreateReply::default();
+    let colour = random_color();
+    for c in canteens.chunks(DISCORD_FIELDS_ON_AN_EMBED_LIMIT) {
+        let mut embed = CreateEmbed::default();
+        for canteen in c {
+            let mut description = format!(
+                "[{}]({})",
+                canteen.location.address,
+                link_location(&canteen)
+            );
+            if queue_statuses.contains_key(&canteen.canteen_id) {
+                let queue_status = queue_statuses.get(&canteen.canteen_id).unwrap();
+                description.push_str(&format!(
+                    "\nQueue: {} ({:.0}%)",
+                    queue_status.current, queue_status.percent
+                ));
             }
-            e.title("List of all canteens")
-        })
-    })
-    .await?;
+            embed = embed.field(&canteen.name, description, true);
+        }
+        reply = reply.embed(embed.title("List of all canteens").color(colour));
+    }
+    ctx.send(reply).await?;
     Ok(())
 }
 
@@ -140,14 +143,12 @@ async fn next(
     let day = menu.days.remove(index.unwrap());
 
     let labels = get_emojis_for_labels().await?;
-    ctx.send(|m| {
-        create_menu_embed(m, day, &labels);
-        m.content(format!(
-            "Today's Menu in [{}]({})",
-            canteen.name,
-            link_location(&canteen)
-        ))
-    })
+    let reply = create_menu_embed(CreateReply::default(), day, &labels);
+    ctx.send(reply.content(format!(
+        "Today's Menu in [{}]({})",
+        canteen.name,
+        link_location(&canteen)
+    )))
     .await?;
     Ok(())
 }
@@ -162,47 +163,24 @@ async fn week(
     let (canteen, menu) = get_menu(canteen_name).await?;
 
     let labels = get_emojis_for_labels().await?;
-    ctx.send(|m| {
-        for day in menu.days {
-            create_menu_embed(m, day, &labels);
-        }
-        m.content(format!(
-            "This week's Menu in [{}]({})",
-            canteen.name,
-            link_location(&canteen)
-        ))
-    })
+    let mut reply = CreateReply::default();
+    for day in menu.days {
+        reply = create_menu_embed(reply, day, &labels);
+    }
+    ctx.send(reply.content(format!(
+        "This week's Menu in [{}]({})",
+        canteen.name,
+        link_location(&canteen)
+    )))
     .await?;
     Ok(())
 }
 
-const COLORS: [Colour; 19] = [
-    Colour::BLURPLE,
-    Colour::DARK_GOLD,
-    Colour::DARK_GREEN,
-    Colour::BLITZ_BLUE,
-    Colour::DARK_PURPLE,
-    Colour::DARK_RED,
-    Colour::DARK_TEAL,
-    Colour::GOLD,
-    Colour::MAGENTA,
-    Colour::BLUE,
-    Colour::ORANGE,
-    Colour::PURPLE,
-    Colour::RED,
-    Colour::ROSEWATER,
-    Colour::TEAL,
-    Colour::BLITZ_BLUE,
-    Colour::MEIBE_PINK,
-    Colour::MAGENTA,
-    Colour::FOOYOO,
-];
-
 fn create_menu_embed(
-    msg: &mut CreateReply,
+    msg: CreateReply,
     day: DayMenu,
     emojis_for_labels: &HashMap<String, String>,
-) {
+) -> CreateReply {
     let (mut side_dishes, mut dishes): (Vec<Dish>, Vec<Dish>) = day
         .dishes
         .into_iter()
@@ -220,19 +198,16 @@ fn create_menu_embed(
             .collect(),
     });
 
-    msg.embed(|embed| {
-        for dish in dishes {
-            let emojis = dish
-                .labels
-                .iter()
-                .filter_map(|l| emojis_for_labels.get(l))
-                .join(" ");
-            embed.field(dish.dish_type, format!("{}\n{}", dish.name, emojis), true);
-        }
-
-        embed.title(day.date);
-        embed.color(COLORS[Utc::now().second() as usize % COLORS.len()])
-    });
+    let mut embed = CreateEmbed::default();
+    for dish in dishes {
+        let emojis = dish
+            .labels
+            .iter()
+            .filter_map(|l| emojis_for_labels.get(l))
+            .join(" ");
+        embed = embed.field(dish.dish_type, format!("{}\n{}", dish.name, emojis), true);
+    }
+    msg.embed(embed.title(day.date).color(random_color()))
 }
 
 fn link_location(canteen: &Canteen) -> String {
@@ -284,18 +259,20 @@ async fn get_menu(canteen_name: Option<String>) -> Result<(Canteen, WeekMenu), E
     let now = Local::now().with_timezone(&TIMEZONE);
     let week = now.iso_week().week();
 
-    let menu = HTTP_CLIENT
-        .get(format!(
-            "{}/{}/{}/{:02}.json",
-            EAT_API_URL,
-            canteen.canteen_id,
-            now.year(),
-            week
-        ))
-        .send()
-        .await?
-        .json::<WeekMenu>()
-        .await?;
+    let menu_url = format!(
+        "{}/{}/{}/{:02}.json",
+        EAT_API_URL,
+        canteen.canteen_id,
+        now.year(),
+        week
+    );
 
-    Ok((canteen, menu))
+    let response = HTTP_CLIENT.get(menu_url).send().await?;
+    match response.error_for_status() {
+        Ok(response) => {
+            let menu = response.json::<WeekMenu>().await?;
+            Ok((canteen, menu))
+        }
+        Err(e) => Err(Error::from(format!("Menu fetching failed: {}", e))),
+    }
 }

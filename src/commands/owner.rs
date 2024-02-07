@@ -5,7 +5,7 @@ use crate::{Context, Error};
 pub(crate) async fn exclude(ctx: Context<'_>) -> Result<(), Error> {
     let channel_name = ctx
         .channel_id()
-        .name(ctx.cache())
+        .name(ctx.http())
         .await
         .unwrap_or("Channel".to_string());
 
@@ -18,8 +18,7 @@ pub(crate) async fn exclude(ctx: Context<'_>) -> Result<(), Error> {
         excluded.insert(ctx.channel_id())
     };
     if inserted {
-        ctx.send(|m| m.content(format!("Excluded {}", channel_name)))
-            .await?;
+        ctx.reply(format!("Excluded {}", channel_name)).await?;
     } else {
         {
             let mut lock = ctx
@@ -29,7 +28,7 @@ pub(crate) async fn exclude(ctx: Context<'_>) -> Result<(), Error> {
                 .expect("excluded_channels");
             lock.remove(&ctx.channel_id());
         }
-        ctx.send(|m| m.content(format!("{} is no longer excluded", channel_name)))
+        ctx.reply(format!("{} is no longer excluded", channel_name))
             .await?;
     }
     Ok(())

@@ -3,8 +3,8 @@ use std::time::Duration;
 use anyhow::Context as _;
 use poise::serenity_prelude;
 use poise::serenity_prelude::{
-    CacheHttp, CollectReaction, EmojiId, GuildId, Mentionable, Message, Reaction, ReactionAction,
-    ReactionType, RoleId,
+    CacheHttp, EmojiId, GuildId, Mentionable, Message, Reaction, ReactionCollector, ReactionType,
+    RoleId,
 };
 use sqlx::query;
 use tracing::{debug, error, info, warn};
@@ -30,10 +30,9 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
     ctx.say("React to the message with the emoji").await?;
 
     let guild_id = ctx.guild_id().context("guild_only")?;
-    let reaction = CollectReaction::new(ctx)
+    let reaction = ReactionCollector::new(ctx)
         .guild_id(guild_id)
         .author_id(ctx.author().id)
-        .removed(false)
         .timeout(REACTION_ROLE_TIMEOUT)
         .await;
     let reaction = match reaction {
@@ -44,17 +43,12 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
         }
         Some(r) => r,
     };
-    match reaction.as_ref() {
-        ReactionAction::Removed(_) => unreachable!(),
-        ReactionAction::Added(reaction) => {
-            let msg = reaction
-                .channel_id
-                .message(ctx.http(), reaction.message_id)
-                .await?;
-            reaction.delete(ctx.http()).await?;
-            add_reaction_role(ctx, role, msg, reaction.emoji.clone()).await
-        }
-    }
+    let msg = reaction
+        .channel_id
+        .message(ctx.http(), reaction.message_id)
+        .await?;
+    reaction.delete(ctx.http()).await?;
+    add_reaction_role(ctx, role, msg, reaction.emoji.clone()).await
 }
 
 /// Choose the role, message and emoji for a new reaction role
@@ -110,7 +104,7 @@ async fn add_reaction_role(
     );
     let inserted = {
         let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
-        reaction_roles.insert(message.id.0)
+        reaction_roles.insert(message.id.into())
     };
     if !inserted {
         info!("Duplicate reaction role, role already assigned to this message");
@@ -121,7 +115,7 @@ async fn add_reaction_role(
     let emoji_id = get_emoji_id(reaction_type.clone(), ctx.data()).await?;
     let guild_id = ctx.guild_id().context("guild_only")?;
     query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
-        message.id.0 as i64, message.channel_id.0 as i64, guild_id.0 as i64, role_id.0 as i64, emoji_id,
+        message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
     ).execute(&ctx.data().database).await?;
 
     message.react(ctx.http(), reaction_type).await?;
@@ -134,10 +128,9 @@ pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
     ctx.say("React to the message").await?;
 
     let guild_id = ctx.guild_id().context("guild_only")?;
-    let reaction = CollectReaction::new(ctx)
+    let reaction = ReactionCollector::new(ctx)
         .guild_id(guild_id)
         .author_id(ctx.author().id)
-        .removed(true)
         .timeout(REACTION_ROLE_TIMEOUT)
         .await;
     let reaction = match reaction {
@@ -148,37 +141,28 @@ pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
         }
         Some(r) => r,
     };
-    match reaction.as_ref() {
-        ReactionAction::Removed(reaction) | ReactionAction::Added(reaction) => {
-            let msg = reaction
-                .channel_id
-                .message(ctx.http(), reaction.message_id)
-                .await?;
-            msg.delete_reaction_emoji(ctx.http(), reaction.emoji.clone())
-                .await?;
-            remove_reaction_role(ctx, msg, reaction.emoji.clone()).await
-        }
-    }
+
+    reaction
+        .channel_id
+        .delete_reaction_emoji(ctx.http(), &reaction.message_id, reaction.emoji.clone())
+        .await?;
+    remove_reaction_role(ctx, reaction).await
 }
 
-async fn remove_reaction_role(
-    ctx: Context<'_>,
-    message: Message,
-    reaction_type: ReactionType,
-) -> Result<(), Error> {
+async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<(), Error> {
     info!(
         "Removing reaction role here {} with emoji {}",
-        link_msg!(ctx.guild_id(), message.channel_id, message.id),
-        reaction_type
+        link_msg!(ctx.guild_id(), reaction.channel_id, reaction.message_id),
+        reaction.emoji
     );
     {
         let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
-        reaction_roles.remove(&message.id.0);
+        reaction_roles.remove(&reaction.message_id.get());
     }
-    let emoji_id = get_emoji_id(reaction_type, ctx.data()).await?;
+    let emoji_id = get_emoji_id(reaction.emoji, ctx.data()).await?;
     query!(
         "DELETE FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
-        message.id.0 as i64,
+        reaction.message_id.get() as i64,
         emoji_id
     )
     .execute(&ctx.data().database)
@@ -203,7 +187,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
                 reaction_role.guild_id as u64
             ),
             emoji,
-            RoleId(reaction_role.role_id as u64).mention()
+            RoleId::new(reaction_role.role_id as u64).mention()
         ));
     }
     ctx.say(roles.join("\n")).await?;
@@ -212,7 +196,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
 
 async fn get_emoji_id(reaction_type: ReactionType, data: &Data) -> Result<i64, Error> {
     match reaction_type {
-        ReactionType::Custom { id, .. } => Ok(id.0 as i64),
+        ReactionType::Custom { id, .. } => Ok(id.get() as i64),
         ReactionType::Unicode(unicode) => {
             query!(
                 "INSERT INTO unicode_to_emoji (unicode) VALUES ($1) ON CONFLICT DO NOTHING",
@@ -246,7 +230,7 @@ async fn get_emoji_from_id(ctx: Context<'_>, emoji_id: i64) -> Result<ReactionTy
     Ok(ReactionType::from(
         ctx.guild_id()
             .context("guild_only")?
-            .emoji(ctx.http(), EmojiId(emoji_id as u64))
+            .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
             .await
             .context("Emoji should exist")?,
     ))
@@ -262,7 +246,7 @@ pub(crate) async fn change_reaction_role(
         .reaction_msgs
         .read()
         .unwrap()
-        .contains(&reaction.message_id.0);
+        .contains(&reaction.message_id.get());
     if !(has_reaction_role) {
         return Ok(());
     }
@@ -274,7 +258,7 @@ pub(crate) async fn change_reaction_role(
     let emoji = get_emoji_id(reaction.emoji.clone(), data).await?;
     let reaction_role = query!(
         "SELECT * FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
-        reaction.message_id.0 as i64,
+        reaction.message_id.get() as i64,
         emoji
     )
     .fetch_optional(&data.database)
@@ -299,7 +283,7 @@ pub(crate) async fn change_reaction_role(
         }
         Some(user_id) => user_id,
     };
-    let member = GuildId(record.guild_id as u64)
+    let member = GuildId::new(record.guild_id as u64)
         .member(ctx.http(), user_id)
         .await;
     if let Err(e) = member {
@@ -313,8 +297,8 @@ pub(crate) async fn change_reaction_role(
         return Err(Error::from("Couldn't get user from reaction"));
     }
 
-    let role_id = RoleId(record.role_id as u64);
-    let mut member = member.unwrap();
+    let role_id = RoleId::new(record.role_id as u64);
+    let member = member.unwrap();
     let change = if add {
         member.add_role(ctx.http(), role_id).await
     } else {

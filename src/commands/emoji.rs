@@ -3,11 +3,11 @@ use std::time::Duration;
 use anyhow::Context as _;
 use base64::Engine;
 use once_cell::sync::Lazy;
-use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::{
-    Attachment, ButtonStyle, CollectComponentInteraction, EmojiIdentifier, Message, ReactionType,
-    SerenityError,
+    Attachment, ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton,
+    CreateEmbed, EmojiIdentifier, Message, ReactionType,
 };
+use poise::CreateReply;
 use regex::Regex;
 use tracing::error;
 
@@ -45,23 +45,22 @@ impl NewEmoji {
     }
 }
 
-async fn add_emoji(
+async fn add_emoji<T: std::error::Error + Send + Sync>(
     ctx: Context<'_>,
     name: String,
-    data: poise::serenity_prelude::Result<Vec<u8>>,
+    data: Result<Vec<u8>, T>,
     content_type: &String,
 ) -> Result<(), Error> {
     let partial_guild = match ctx.partial_guild().await {
         None => {
             error!("Can't fetch guild {}", ctx.author());
-            ctx.send(|m| m.content("Can't fetch your guild, try again later."))
-                .await?;
+            ctx.say("Can't fetch your guild, try again later.").await?;
             return Ok(());
         }
         Some(guild) => guild,
     };
     if partial_guild.emojis.iter().any(|(_, e)| e.name == name) {
-        ctx.send(|m| m.content("There already is an emoji with the same name"))
+        ctx.reply("There already is an emoji with the same name")
             .await?;
         return Ok(());
     }
@@ -69,43 +68,30 @@ async fn add_emoji(
         Ok(content) => content,
         Err(why) => {
             error!("Error downloading image: {:?}", why);
-            ctx.send(|m| m.content("Error downloading image")).await?;
+            ctx.reply("Error downloading image").await?;
             return Ok(());
         }
     };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&content);
     let data = format!("data:{};base64,{}", content_type, b64);
     let guild = ctx.guild_id().context("guild_only")?;
-    // ugly, but has audit reason
-    let map = json!({
-        "name": &name,
-        "image": &data,
-    });
-    ctx.http()
-        .as_ref()
-        .create_emoji(
-            guild.0,
-            &map,
-            Some(&format!("{} used a command", &ctx.author().name)),
-        )
-        .await?;
+    guild.create_emoji(ctx.http(), &name, &data).await?;
 
     let emojis = guild.emojis(ctx.http()).await?;
     let emoji = emojis
         .iter()
         .find(|e| e.name == name)
         .expect("we just added it");
-    ctx.send(|m| {
-        let animated = if content_type.contains(ANIMATED_EMOJI_FORMAT) {
-            "a"
-        } else {
-            ""
-        };
-        m.content(format!(
-            "Added new emoji <{}:{}:{}>",
-            animated, emoji.name, emoji.id
-        ))
-    })
+
+    let animated = if content_type.contains(ANIMATED_EMOJI_FORMAT) {
+        "a"
+    } else {
+        ""
+    };
+    ctx.reply(format!(
+        "Added new emoji <{}:{}:{}>",
+        animated, emoji.name, emoji.id
+    ))
     .await?;
     Ok(())
 }
@@ -117,33 +103,28 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
     let cancel_uuid = format!("{}cancel", ctx.id());
     let amount_emojis = emojis.len();
 
-    let reply = ctx
-        .send(|m| {
-            m.content(format!("Create {} emojis?", amount_emojis));
-            for emoji in &emojis {
-                m.embed(|e| e.title(&emoji.name).thumbnail(&emoji.url));
-            }
-            m.components(|c| {
-                c.create_action_row(|a| {
-                    a.create_button(|confirm| {
-                        confirm
-                            .style(ButtonStyle::Success)
-                            .label("Add")
-                            .custom_id(&add_uuid)
-                    });
-                    a.create_button(|cancel| {
-                        cancel
-                            .style(ButtonStyle::Danger)
-                            .label("Cancel")
-                            .custom_id(&cancel_uuid)
-                    })
-                })
-            })
-        })
-        .await?;
+    let mut reply = {
+        let components = vec![CreateActionRow::Buttons(vec![
+            CreateButton::new(&add_uuid)
+                .style(ButtonStyle::Success)
+                .label("Add"),
+            CreateButton::new(&cancel_uuid)
+                .style(ButtonStyle::Danger)
+                .label("Cancel"),
+        ])];
+
+        CreateReply::default()
+            .content(format!("Create {} emojis?", amount_emojis))
+            .components(components)
+    };
+    for emoji in &emojis {
+        reply = reply.embed(CreateEmbed::new().title(&emoji.name).thumbnail(&emoji.url));
+    }
+
+    let reply_handle = ctx.send(reply).await?;
 
     let string = ctx.id().to_string();
-    let answer = match CollectComponentInteraction::new(ctx)
+    let answer = match ComponentInteractionCollector::new(ctx)
         .author_id(ctx.author().id)
         .channel_id(ctx.channel_id())
         .timeout(ADD_EMOJIS_TIMEOUT)
@@ -159,16 +140,14 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
                         Ok(content) => content.bytes().await,
                         Err(why) => {
                             error!("Error downloading emoji: {:?}", why);
-                            ctx.send(|m| m.content("Error downloading emoji")).await?;
+                            ctx.reply("Error downloading emoji").await?;
                             return Ok(());
                         }
                     };
                     add_emoji(
                         ctx,
                         emoji.name,
-                        bytes
-                            .map(|b| b.to_vec())
-                            .map_err(|e| SerenityError::from(e)),
+                        bytes.map(|b| b.to_vec()),
                         &emoji.content_type,
                     )
                     .await?;
@@ -179,8 +158,8 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
             }
         }
     };
-    reply.edit(ctx, |b| b.content(answer)).await?;
-    remove_components_but_keep_embeds(ctx, reply).await
+    ctx.reply(answer).await?;
+    remove_components_but_keep_embeds(ctx, reply_handle).await
 }
 
 fn extract_emojis(content: String) -> Vec<NewEmoji> {
@@ -202,8 +181,8 @@ fn extract_emojis(content: String) -> Vec<NewEmoji> {
 #[poise::command(
     slash_command,
     prefix_command,
-    required_permissions = "MANAGE_EMOJIS_AND_STICKERS",
-    required_bot_permissions = "MANAGE_EMOJIS_AND_STICKERS",
+    required_permissions = "MANAGE_GUILD_EXPRESSIONS",
+    required_bot_permissions = "MANAGE_GUILD_EXPRESSIONS",
     guild_only,
     subcommands(
         "upload",
@@ -234,19 +213,7 @@ pub(crate) async fn rename(
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().context("guild_only")?;
-    // ugly, but has audit reason
-    let map = json!({
-        "name": &new_name,
-    });
-    ctx.http()
-        .as_ref()
-        .edit_emoji(
-            guild.0,
-            emoji.id.0,
-            &map,
-            Some(&format!("{} used a command", &ctx.author().name)),
-        )
-        .await?;
+    guild.edit_emoji(ctx.http(), emoji.id, &new_name).await?;
     done!(ctx);
 }
 
@@ -292,12 +259,12 @@ pub(crate) async fn copy_text(ctx: Context<'_>, text: String) -> Result<(), Erro
 pub(crate) async fn upload(ctx: Context<'_>, name: String, image: Attachment) -> Result<(), Error> {
     match &image.content_type {
         None => {
-            ctx.send(|m| m.content("Not an image")).await?;
+            ctx.reply("Not an image").await?;
             return Ok(());
         }
         Some(content_type) => {
             if !content_type.starts_with("image/") {
-                ctx.send(|m| m.content("Not an image")).await?;
+                ctx.reply("Not an image").await?;
                 return Ok(());
             }
             ctx.defer().await?;
