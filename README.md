@@ -29,6 +29,10 @@ Cutie Pie: tell your friends how cute they are
 
 store anything you like
 
+#### Reminder
+
+schedule whatever you like for later
+
 #### Mensa plan
 
 know what's up for lunch  

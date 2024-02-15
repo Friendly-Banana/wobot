@@ -1,9 +1,9 @@
 use std::collections::{HashMap, HashSet};
-use std::ops::Add;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context as _};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use image::{DynamicImage, GenericImage};
 use poise::futures_util::future::try_join_all;
 use poise::serenity_prelude::UserId;
@@ -12,9 +12,12 @@ use tracing::{debug, info};
 
 use crate::commands::send_image;
 use crate::commands::utils::load_avatar;
+use crate::constants::{ONE_DAY, ONE_HOUR};
 use crate::{Context, Error};
 
-const DISAPPEAR_TIME: Duration = Duration::milliseconds(3600 * 1000);
+const DEFAULT_DISAPPEAR_TIME: Duration = ONE_HOUR;
+const MAX_DISAPPEAR_TIME: Duration = ONE_DAY;
+
 const MENSA_PLAN_PATH: &str = "assets/mensa_plan.png";
 static MENSA_PLAN_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
 
@@ -38,8 +41,7 @@ pub(crate) async fn cruisine(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// mark your position in the mensa
-/// or play battleship
+/// mark your position in the mensa or play battleship
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn add(
     ctx: Context<'_>,
@@ -52,13 +54,10 @@ pub(crate) async fn add(
     let (letter, number) = parse_cruisine_letters(&position)?;
 
     let duration = match expires {
-        Some(x) => Duration::from_std(parse_duration::parse(x.as_str())?)?,
-        None => DISAPPEAR_TIME,
+        Some(x) => parse_duration::parse(x.as_str())?.min(MAX_DISAPPEAR_TIME),
+        None => DEFAULT_DISAPPEAR_TIME,
     };
     if duration.is_zero() {
-        ctx.defer_ephemeral().await?;
-        ctx.say("Your location was rapidly approached (position was deleted).")
-            .await?;
         ctx.data()
             .mensa_state
             .write()
@@ -69,13 +68,16 @@ pub(crate) async fn add(
             .write()
             .unwrap()
             .remove(&ctx.author().id);
+        ctx.say("Your location was rapidly approached (position was deleted).")
+            .await?;
         return Ok(());
     }
 
+    // account for possibly non-zero start coordinates
     let pos = MensaPosition {
         x: letter as u8 - MIN_X as u8,
         y: number - MIN_Y,
-        expires: Utc::now().add(duration),
+        expires: Utc::now() + (duration),
     };
     {
         let mut m = ctx.data().mensa_state.write().unwrap();

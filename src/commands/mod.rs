@@ -7,7 +7,7 @@ use crate::{Context, Error};
 
 pub(crate) use self::{
     bot::*, cruisine::*, cutie_pie::*, emoji::*, events::*, features::*, fun::*, meme::*, mensa::*,
-    moderation::*, obama::*, owner::*, reaction_role::*,
+    moderation::*, obama::*, owner::*, reaction_role::*, reminder::*,
 };
 
 mod bot;
@@ -24,6 +24,7 @@ mod moderation;
 mod obama;
 mod owner;
 mod reaction_role;
+mod reminder;
 mod utils;
 
 pub(crate) fn link_message(guild_id: u64, channel_id: u64, msg_id: u64) -> String {

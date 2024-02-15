@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::sync::RwLock;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use image::DynamicImage;
@@ -15,10 +16,12 @@ use shuttle_runtime::CustomError;
 use shuttle_secrets::SecretStore;
 use shuttle_serenity::ShuttleSerenity;
 use sqlx::{query, PgPool};
-use tracing::{debug, info};
+use tracing::info;
 
+use crate::check_reminder::check_reminders;
 use crate::commands::*;
 
+mod check_reminder;
 mod commands;
 mod constants;
 mod easy_embed;
@@ -93,6 +96,7 @@ async fn poise(
         clear(),
         emoji(),
         features(),
+        reminder(),
         mensa(),
         canteen(),
         cruisine(),
@@ -121,7 +125,9 @@ async fn poise(
                 let reaction_msgs: Vec<_> = query!("SELECT message_id FROM reaction_roles")
                     .fetch_all(&pool)
                     .await?;
-                debug!("Loaded reaction messages");
+                info!("Loaded reaction messages");
+                check_reminders(ctx.clone(), pool.clone(), Duration::from_secs(60));
+                info!("Started reminder thread");
                 Ok(Data {
                     database: pool,
                     bot_id: RwLock::new(ready.user.id),

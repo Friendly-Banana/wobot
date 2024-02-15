@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH deleted AS (DELETE FROM reminder WHERE user_id = $1 AND content = $2 RETURNING *) SELECT count(*) FROM deleted",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3794f86c0a1e47e619aaf3eb005405e51156c0fa01ef3333ad1fc17057a4826d"
+}
