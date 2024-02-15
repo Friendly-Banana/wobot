@@ -83,6 +83,7 @@ async fn poise(
         meme(),
         obama(),
         cutie_pie(),
+        capy(),
         keyword_statistics(),
         boop(),
         uwu(),

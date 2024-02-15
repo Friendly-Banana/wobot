@@ -1,6 +1,6 @@
 [package]
 name = "robot"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 publish = false
 
@@ -17,7 +17,7 @@ tokio = "1.35.1"
 sqlx = { version = "0.7.3", default-features = false, features = ["runtime-tokio", "tls-rustls", "chrono", "postgres", "sqlx-postgres", "bigdecimal"] }
 base64 = "0.21.7"
 regex = "1.10.3"
-reqwest = { version = "0.11.23", default-features = false, features = ["tokio-rustls", "json"] }
+reqwest = { version = "0.11.23", features = ["tokio-rustls", "json"] }
 once_cell = "1.19.0"
 itertools = "0.12.0"
 imageproc = "0.23.0"
@@ -30,6 +30,6 @@ deser-hjson = "2.2.4"
 chrono = "0.4.34"
 percent-encoding = "2.3.1"
 chrono-tz = "0.8.6"
-stitchy-core = "0.1.0"
+stitchy-core = { version = "0.1.0", git = "https://github.com/grimace87/Stitchy" }
 parse_duration = "2.1.1"
 rand = "0.8.5"
