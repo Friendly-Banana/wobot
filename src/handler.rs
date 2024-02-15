@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use poise::serenity_prelude::{
-    CacheHttp, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, Mentionable,
+    CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, Mentionable,
 };
 use poise::FrameworkContext;
 use sqlx::query;
@@ -10,7 +10,7 @@ use crate::commands::change_reaction_role;
 use crate::{Data, Error};
 
 pub(crate) async fn event_handler(
-    ctx: &poise::serenity_prelude::Context,
+    ctx: &Context,
     event: &FullEvent,
     _framework: FrameworkContext<'_, Data, Error>,
     data: &Data,

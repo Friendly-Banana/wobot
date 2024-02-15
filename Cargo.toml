@@ -7,10 +7,10 @@ publish = false
 [dependencies]
 anyhow = "1.0.79"
 poise = { version = "0.6.1", features = ["cache", "chrono"] }
-shuttle-serenity = "0.37.0"
-shuttle-runtime = "0.37.0"
-shuttle-secrets = "0.37.0"
-shuttle-shared-db = { version = "0.37.0", default-features = false, features = ["postgres", "sqlx"] }
+shuttle-serenity = "0.38.0"
+shuttle-runtime = "0.38.0"
+shuttle-secrets = "0.38.0"
+shuttle-shared-db = { version = "0.38.0", default-features = false, features = ["postgres", "sqlx"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 tokio = "1.35.1"
@@ -27,9 +27,9 @@ ics = "0.5.8"
 uwuify = "0.2.2"
 serde = "1.0.195"
 deser-hjson = "2.2.4"
-chrono = "0.4.32"
+chrono = "0.4.34"
 percent-encoding = "2.3.1"
-chrono-tz = "0.8.5"
+chrono-tz = "0.8.6"
 stitchy-core = "0.1.0"
 parse_duration = "2.1.1"
 rand = "0.8.5"
