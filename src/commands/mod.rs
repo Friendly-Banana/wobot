@@ -1,9 +1,4 @@
-use image::codecs::png::PngEncoder;
-use image::DynamicImage;
-use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
-use poise::{CreateReply, ReplyHandle};
-
-use crate::{Context, Error};
+use poise::serenity_prelude::{ChannelId, GuildId, MessageId};
 
 pub(crate) use self::{
     bot::*, cruisine::*, cutie_pie::*, emoji::*, events::*, features::*, fun::*, meme::*, mensa::*,
@@ -27,23 +22,8 @@ mod reaction_role;
 mod reminder;
 mod utils;
 
-pub(crate) fn link_message(guild_id: u64, channel_id: u64, msg_id: u64) -> String {
-    format!(
-        "https://discord.com/channels/{}/{}/{}",
-        guild_id, channel_id, msg_id
-    )
-}
-
-#[macro_export]
-macro_rules! link_msg {
-    ($guild_id:expr, $channel_id:expr, $msg_id:expr) => {{
-        use crate::commands::link_message;
-        link_message(
-            $guild_id.context("guild_only")?.get(),
-            $channel_id.get(),
-            $msg_id.get(),
-        )
-    }};
+pub(crate) fn link_message(guild: Option<GuildId>, channel_id: i64, msg_id: i64) -> String {
+    MessageId::new(msg_id as u64).link(ChannelId::new(channel_id as u64), guild)
 }
 
 #[macro_export]
@@ -59,29 +39,4 @@ macro_rules! done {
         .await?;
         return Ok(());
     };
-}
-
-pub(crate) async fn remove_components_but_keep_embeds(
-    ctx: Context<'_>,
-    reply: ReplyHandle<'_>,
-) -> Result<(), Error> {
-    let emoji_embeds = reply.message().await?;
-    let mut m = CreateReply::default();
-    m.embeds = emoji_embeds
-        .embeds
-        .to_owned()
-        .into_iter()
-        .map(|e| CreateEmbed::from(e))
-        .collect();
-    reply.edit(ctx, m).await?;
-    Ok(())
-}
-
-async fn send_image(ctx: Context<'_>, img: DynamicImage, filename: String) -> Result<(), Error> {
-    let mut output_bytes: Vec<u8> = Vec::new();
-    img.write_with_encoder(PngEncoder::new(&mut output_bytes))?;
-
-    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(output_bytes, filename)))
-        .await?;
-    Ok(())
 }

@@ -10,8 +10,8 @@ use poise::serenity_prelude::UserId;
 use stitchy_core::Stitch;
 use tracing::{debug, info};
 
-use crate::commands::send_image;
 use crate::commands::utils::load_avatar;
+use crate::commands::utils::send_image;
 use crate::constants::{ONE_DAY, ONE_HOUR};
 use crate::{Context, Error};
 

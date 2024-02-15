@@ -12,7 +12,7 @@ use tracing::{info, warn};
 
 use crate::commands::feature_state::FeatureState;
 use crate::commands::feature_state::FeatureState::*;
-use crate::commands::remove_components_but_keep_embeds;
+use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::easy_embed::EasyEmbed;
 use crate::{Context, Error};
 

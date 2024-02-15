@@ -9,7 +9,8 @@ use poise::serenity_prelude::{
 use sqlx::query;
 use tracing::{debug, error, info, warn};
 
-use crate::{done, link_message, link_msg, Context, Data, Error};
+use crate::commands::link_message;
+use crate::{done, Context, Data, Error};
 
 const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -29,7 +30,7 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
     ctx.defer_ephemeral().await?;
     ctx.say("React to the message with the emoji").await?;
 
-    let guild_id = ctx.guild_id().context("guild_only")?;
+    let guild_id = ctx.guild_id().expect("guild_only");
     let reaction = ReactionCollector::new(ctx)
         .guild_id(guild_id)
         .author_id(ctx.author().id)
@@ -71,7 +72,7 @@ async fn add_reaction_role(
 ) -> Result<(), Error> {
     let mut roles = ctx
         .guild_id()
-        .context("guild_only")?
+        .expect("guild_only")
         .roles(ctx.http())
         .await?;
     if !roles.contains_key(&role_id) {
@@ -83,7 +84,7 @@ async fn add_reaction_role(
     if let ReactionType::Custom { id, .. } = reaction_type {
         if ctx
             .guild_id()
-            .context("guild_only")?
+            .expect("guild_only")
             .emoji(ctx.http(), id)
             .await
             .is_err()
@@ -96,12 +97,6 @@ async fn add_reaction_role(
     }
 
     let role = roles.remove(&role_id).expect("role exists");
-    info!(
-        "Adding reaction role {} here {} with emoji {}",
-        role,
-        link_msg!(ctx.guild_id(), message.channel_id, message.id),
-        reaction_type
-    );
     let inserted = {
         let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
         reaction_roles.insert(message.id.into())
@@ -113,11 +108,17 @@ async fn add_reaction_role(
         return Ok(());
     }
     let emoji_id = get_emoji_id(reaction_type.clone(), ctx.data()).await?;
-    let guild_id = ctx.guild_id().context("guild_only")?;
+    let guild_id = ctx.guild_id().expect("guild_only");
     query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
         message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
     ).execute(&ctx.data().database).await?;
 
+    info!(
+        "Added reaction role {} here {} with emoji {}",
+        role,
+        message.link(),
+        reaction_type
+    );
     message.react(ctx.http(), reaction_type).await?;
     done!(ctx);
 }
@@ -127,7 +128,7 @@ pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     ctx.say("React to the message").await?;
 
-    let guild_id = ctx.guild_id().context("guild_only")?;
+    let guild_id = ctx.guild_id().expect("guild_only");
     let reaction = ReactionCollector::new(ctx)
         .guild_id(guild_id)
         .author_id(ctx.author().id)
@@ -142,17 +143,16 @@ pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
         Some(r) => r,
     };
 
-    reaction
-        .channel_id
-        .delete_reaction_emoji(ctx.http(), &reaction.message_id, reaction.emoji.clone())
-        .await?;
+    reaction.delete_all(ctx.http()).await?;
     remove_reaction_role(ctx, reaction).await
 }
 
 async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<(), Error> {
     info!(
         "Removing reaction role here {} with emoji {}",
-        link_msg!(ctx.guild_id(), reaction.channel_id, reaction.message_id),
+        reaction
+            .message_id
+            .link(reaction.channel_id, reaction.guild_id),
         reaction.emoji
     );
     {
@@ -182,9 +182,9 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         roles.push(format!(
             "{} {} {}",
             link_message(
-                reaction_role.message_id as u64,
-                reaction_role.channel_id as u64,
-                reaction_role.guild_id as u64
+                Some(GuildId::new(reaction_role.guild_id as u64)),
+                reaction_role.channel_id,
+                reaction_role.message_id,
             ),
             emoji,
             RoleId::new(reaction_role.role_id as u64).mention()
@@ -229,7 +229,7 @@ async fn get_emoji_from_id(ctx: Context<'_>, emoji_id: i64) -> Result<ReactionTy
     }
     Ok(ReactionType::from(
         ctx.guild_id()
-            .context("guild_only")?
+            .expect("guild_only")
             .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
             .await
             .context("Emoji should exist")?,
@@ -247,11 +247,7 @@ pub(crate) async fn change_reaction_role(
         .read()
         .unwrap()
         .contains(&reaction.message_id.get());
-    if !(has_reaction_role) {
-        return Ok(());
-    }
-
-    if reaction.user(ctx.http()).await?.bot {
+    if !has_reaction_role || reaction.user(ctx.http()).await?.bot {
         return Ok(());
     }
 
@@ -265,8 +261,10 @@ pub(crate) async fn change_reaction_role(
     .await?;
     if reaction_role.is_none() {
         warn!(
-            "Expected reaction role for message {} with reaction {}, might be unrelated reaction",
-            link_msg!(reaction.guild_id, reaction.channel_id, reaction.message_id),
+            "Expected reaction role here {} with reaction {}, might be unrelated reaction",
+            reaction
+                .message_id
+                .link(reaction.channel_id, reaction.guild_id),
             reaction.emoji
         );
         return Ok(());
@@ -277,7 +275,9 @@ pub(crate) async fn change_reaction_role(
             error!(
                 "Couldn't get user from reaction {} here {}",
                 reaction.emoji,
-                link_msg!(reaction.guild_id, reaction.channel_id, reaction.message_id),
+                reaction
+                    .message_id
+                    .link(reaction.channel_id, reaction.guild_id)
             );
             return Err(Error::from("Couldn't get user from reaction"));
         }
@@ -288,10 +288,12 @@ pub(crate) async fn change_reaction_role(
         .await;
     if let Err(e) = member {
         error!(
-            "Couldn't get member <@{}> from reaction {} here {}: {}",
-            user_id,
+            "Couldn't get member {} from reaction {} here {}: {}",
+            user_id.mention(),
             reaction.emoji,
-            link_msg!(reaction.guild_id, reaction.channel_id, reaction.message_id),
+            reaction
+                .message_id
+                .link(reaction.channel_id, reaction.guild_id),
             e
         );
         return Err(Error::from("Couldn't get user from reaction"));
