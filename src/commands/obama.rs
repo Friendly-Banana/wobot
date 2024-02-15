@@ -9,7 +9,7 @@ use rusttype::Scale;
 use tracing::{debug, info};
 
 use crate::constants::{FONT, WHITE};
-use crate::{done, link_msg, Context, Error};
+use crate::{done, Context, Error};
 
 const SCALE: Scale = Scale { x: 50f32, y: 50f32 };
 const OBAMA_PATH: &str = "assets/obama_medal.jpg";
@@ -32,10 +32,7 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
             .is_some_and(|re| re.author.id == msg.author.id)
             || has_self_reacted(ctx, &msg).await?
         {
-            debug!(
-                "Found message {}, creating meme",
-                link_msg!(ctx.guild_id(), msg.channel_id, msg.id)
-            );
+            debug!("Found message {}, creating meme", msg.link());
             let text = msg.author.name.as_str();
 
             OBAMA_IMAGE.get_or_init(|| {

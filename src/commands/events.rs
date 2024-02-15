@@ -83,7 +83,7 @@ pub(crate) async fn event(
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let (start_date, end_date) = parse_start_and_end_date(start, end)?;
-    let guild_id = ctx.guild_id().context("guild_only")?;
+    let guild_id = ctx.guild_id().expect("guild_only");
     let event = guild_id
         .create_scheduled_event(
             ctx.http(),

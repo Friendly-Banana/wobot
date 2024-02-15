@@ -6,7 +6,7 @@ use poise::serenity_prelude::User;
 use tracing::{debug, info};
 
 use crate::commands::utils;
-use crate::{commands, Context, Error};
+use crate::{Context, Error};
 
 const CUTIE_PIE_PATH: &str = "assets/cutie_pie.png";
 static CUTIE_PIE_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
@@ -27,5 +27,5 @@ pub(crate) async fn cutie_pie(ctx: Context<'_>, user: User) -> Result<(), Error>
         .context("Failed to copy avatar")?;
 
     debug!("Sending cutie pie");
-    commands::send_image(ctx, img, format!("cutie_pie_{}.png", user.name)).await
+    utils::send_image(ctx, img, format!("cutie_pie_{}.png", user.name)).await
 }

@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use anyhow::Context as _;
 use base64::Engine;
 use once_cell::sync::Lazy;
 use poise::serenity_prelude::{
@@ -11,7 +10,7 @@ use poise::CreateReply;
 use regex::Regex;
 use tracing::error;
 
-use crate::commands::remove_components_but_keep_embeds;
+use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::constants::HTTP_CLIENT;
 use crate::{done, Context, Error};
 
@@ -74,7 +73,7 @@ async fn add_emoji<T: std::error::Error + Send + Sync>(
     };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&content);
     let data = format!("data:{};base64,{}", content_type, b64);
-    let guild = ctx.guild_id().context("guild_only")?;
+    let guild = ctx.guild_id().expect("guild_only");
     guild.create_emoji(ctx.http(), &name, &data).await?;
 
     let emojis = guild.emojis(ctx.http()).await?;
@@ -200,7 +199,7 @@ pub(crate) async fn emoji(_ctx: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn remove(ctx: Context<'_>, emoji: EmojiIdentifier) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let guild = ctx.guild_id().context("guild_only")?;
+    let guild = ctx.guild_id().expect("guild_only");
     guild.delete_emoji(ctx.http(), emoji.id).await?;
     done!(ctx);
 }
@@ -212,7 +211,7 @@ pub(crate) async fn rename(
     new_name: String,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    let guild = ctx.guild_id().context("guild_only")?;
+    let guild = ctx.guild_id().expect("guild_only");
     guild.edit_emoji(ctx.http(), emoji.id, &new_name).await?;
     done!(ctx);
 }

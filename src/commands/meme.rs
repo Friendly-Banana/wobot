@@ -7,7 +7,7 @@ use reqwest::Url;
 use rusttype::Scale;
 use tracing::debug;
 
-use crate::commands::send_image;
+use crate::commands::utils::send_image;
 use crate::constants::HTTP_CLIENT;
 use crate::constants::{FONT, WHITE};
 use crate::{Context, Error};

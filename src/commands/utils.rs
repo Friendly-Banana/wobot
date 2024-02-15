@@ -1,6 +1,8 @@
 use anyhow::Context as _;
+use image::codecs::png::PngEncoder;
 use image::DynamicImage;
-use poise::serenity_prelude::{Colour, User};
+use poise::serenity_prelude::{Colour, CreateAttachment, CreateEmbed, User};
+use poise::{CreateReply, ReplyHandle};
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 
@@ -75,4 +77,33 @@ async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> Result<String, Error>
     let mut url = user.default_avatar_url();
     url.push_str("?size=256");
     Ok(url)
+}
+
+pub(crate) async fn remove_components_but_keep_embeds(
+    ctx: Context<'_>,
+    reply: ReplyHandle<'_>,
+) -> Result<(), Error> {
+    let emoji_embeds = reply.message().await?;
+    let mut m = CreateReply::default();
+    m.embeds = emoji_embeds
+        .embeds
+        .to_owned()
+        .into_iter()
+        .map(|e| CreateEmbed::from(e))
+        .collect();
+    reply.edit(ctx, m).await?;
+    Ok(())
+}
+
+pub async fn send_image(
+    ctx: Context<'_>,
+    img: DynamicImage,
+    filename: String,
+) -> Result<(), Error> {
+    let mut output_bytes: Vec<u8> = Vec::new();
+    img.write_with_encoder(PngEncoder::new(&mut output_bytes))?;
+
+    ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(output_bytes, filename)))
+        .await?;
+    Ok(())
 }

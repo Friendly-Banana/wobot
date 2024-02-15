@@ -10,7 +10,7 @@ use sqlx::query;
 use tracing::debug;
 use uwuifier::uwuify_str_sse;
 
-use crate::{done, link_msg, Context, Error};
+use crate::{done, Context, Error};
 
 /// Uwuify a message
 #[poise::command(slash_command, prefix_command, guild_only)]
@@ -19,7 +19,7 @@ pub(crate) async fn uwu(ctx: Context<'_>, message: Message) -> Result<(), Error>
         "{} uwuified {} here {}",
         ctx.author().name,
         message.content,
-        link_msg!(ctx.guild_id(), message.channel_id, message.id)
+        message.link()
     );
     message.reply(ctx, uwuify_str_sse(&message.content)).await?;
     done!(ctx);
