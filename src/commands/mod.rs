@@ -1,11 +1,12 @@
 use poise::serenity_prelude::{ChannelId, GuildId, MessageId};
 
 pub(crate) use self::{
-    bot::*, cruisine::*, cutie_pie::*, emoji::*, events::*, features::*, fun::*, meme::*, mensa::*,
-    moderation::*, obama::*, owner::*, reaction_role::*, reminder::*,
+    bot::*, capybara::*, cruisine::*, cutie_pie::*, emoji::*, events::*, features::*, fun::*,
+    meme::*, mensa::*, moderation::*, obama::*, owner::*, reaction_role::*, reminder::*,
 };
 
 mod bot;
+mod capybara;
 mod cruisine;
 mod cutie_pie;
 mod emoji;
