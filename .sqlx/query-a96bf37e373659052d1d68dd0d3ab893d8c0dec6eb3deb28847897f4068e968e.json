@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE $1 GROUP BY user_id",
+  "query": "SELECT user_id, SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%' GROUP BY user_id",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       null
     ]
   },
-  "hash": "6edf5a9f8365663b0abbdd0971e2abc4f73ab716c6d3bb68288cb0d89216c621"
+  "hash": "a96bf37e373659052d1d68dd0d3ab893d8c0dec6eb3deb28847897f4068e968e"
 }

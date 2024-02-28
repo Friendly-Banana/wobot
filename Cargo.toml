@@ -30,6 +30,6 @@ deser-hjson = "2.2.4"
 chrono = "0.4.34"
 percent-encoding = "2.3.1"
 chrono-tz = "0.8.6"
-stitchy-core = { version = "0.1.0", git = "https://github.com/grimace87/Stitchy" }
+stitchy-core = "0.1.1"
 parse_duration = "2.1.1"
 rand = "0.8.5"
