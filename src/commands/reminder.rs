@@ -2,7 +2,7 @@ use std::convert::identity;
 use std::time::Duration;
 
 use poise::serenity_prelude::model::timestamp;
-use poise::serenity_prelude::{CreateEmbed, FormattedTimestamp, User};
+use poise::serenity_prelude::{CreateEmbed, FormattedTimestamp, Mentionable, User, UserId};
 use poise::CreateReply;
 use sqlx::{query, query_as};
 use timestamp::Timestamp;
@@ -70,7 +70,7 @@ pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Err
             query_as!(
                 Reminder,
                 "SELECT * FROM reminder WHERE user_id = $1",
-                ctx.author().id.get() as i64
+                user.id.get() as i64
             )
             .fetch_all(&ctx.data().database)
             .await?,
@@ -83,8 +83,12 @@ pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Err
                 .await?,
         )
     };
+    const MAX_FIELD_LENGTH: usize = 1024;
     let mut e = CreateEmbed::default().title(title);
-    for reminder in due {
+    for mut reminder in due {
+        let author = format!(" ~ {}", UserId::new(reminder.user_id as u64).mention());
+        reminder.content.truncate(MAX_FIELD_LENGTH - author.len());
+        reminder.content.push_str(&author);
         e = e.field(
             FormattedTimestamp::from(reminder.time).to_string(),
             reminder.content,
@@ -95,7 +99,7 @@ pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Err
     Ok(())
 }
 
-/// delete your scheduled reminders
+/// delete your scheduled reminders by the start of its content
 /// bot owner can delete all reminders
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn delete(
@@ -108,14 +112,14 @@ pub(crate) async fn delete(
     let del = if all.is_some_and(identity)
         && ctx.framework().options.owners.contains(&ctx.author().id)
     {
-        query!("WITH deleted AS (DELETE FROM reminder WHERE content = $1 RETURNING *) SELECT count(*) FROM deleted", message)
-                .fetch_one(&ctx.data().database)
-                .await?.count
+        query!("WITH deleted AS (DELETE FROM reminder WHERE content ILIKE $1 || '%' RETURNING *) SELECT count(*) FROM deleted", message)
+            .fetch_one(&ctx.data().database)
+            .await?.count
     } else {
         query!(
-                "WITH deleted AS (DELETE FROM reminder WHERE user_id = $1 AND content = $2 RETURNING *) SELECT count(*) FROM deleted",
-                ctx.author().id.get() as i64,
-                message
+                "WITH deleted AS (DELETE FROM reminder WHERE content ILIKE $1 || '%' AND user_id = $2 RETURNING *) SELECT count(*) FROM deleted",
+                message,
+                ctx.author().id.get() as i64
             )
             .fetch_one(&ctx.data().database)
             .await?.count

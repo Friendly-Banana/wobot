@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH deleted AS (DELETE FROM reminder WHERE content = $1 RETURNING *) SELECT count(*) FROM deleted",
+  "query": "WITH deleted AS (DELETE FROM reminder WHERE content ILIKE $1 || '%' RETURNING *) SELECT count(*) FROM deleted",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "adc49975d22de014b3857449586618495b4bb6cf21b468eafc87c6f19d50d45f"
+  "hash": "c986f0fc705a0e52073a56b044a9889db4856d8f54e26aabf76e31336b0cd207"
 }
