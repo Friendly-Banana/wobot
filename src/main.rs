@@ -6,14 +6,14 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use image::DynamicImage;
+use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
     ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
 };
 use poise::{Framework, PrefixFrameworkOptions};
 use regex::Regex;
 use serde::Deserialize;
-use shuttle_runtime::CustomError;
-use shuttle_secrets::SecretStore;
+use shuttle_runtime::{CustomError, SecretStore};
 use shuttle_serenity::ShuttleSerenity;
 use sqlx::{query, PgPool};
 use tracing::info;
@@ -70,7 +70,7 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[shuttle_runtime::main]
 async fn poise(
-    #[shuttle_secrets::Secrets] secret_store: SecretStore,
+    #[shuttle_runtime::Secrets] secret_store: SecretStore,
     #[shuttle_shared_db::Postgres(local_uri = "postgres://test:pass@localhost:5432/postgres")]
     pool: PgPool,
 ) -> ShuttleSerenity {
@@ -82,33 +82,34 @@ async fn poise(
     let config: Config = deser_hjson::from_str(&config_data).context("Bad config")?;
 
     let commands = vec![
-        meme(),
-        obama(),
-        cutie_pie(),
-        capy(),
-        animal(),
-        keyword_statistics(),
-        boop(),
-        uwu(),
-        uwu_text(),
-        ping(),
-        latency(),
-        servers(),
-        say(),
-        react(),
         activity(),
-        clear(),
-        emoji(),
-        features(),
-        reminder(),
-        mensa(),
+        animal(),
+        boop(),
         canteen(),
+        capy(),
+        clear(),
         cruisine(),
+        cutie_pie(),
+        emoji(),
         event(),
+        exclude(),
         export_events(),
+        features(),
+        keyword_statistics(),
+        latency(),
+        meme(),
+        mensa(),
+        modules(),
+        obama(),
+        ping(),
+        react(),
         reaction_role(),
         register_commands(),
-        exclude(),
+        reminder(),
+        say(),
+        servers(),
+        uwu(),
+        uwu_text(),
     ];
     let framework = Framework::builder()
         .options(poise::FrameworkOptions {
@@ -122,10 +123,15 @@ async fn poise(
             },
             ..Default::default()
         })
-        .setup(move |ctx, ready, framework| {
+        .setup(move |ctx, ready, _framework| {
             Box::pin(async move {
                 info!("{} is connected!", ready.user.name);
-                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                register_globally(ctx, &[modules(), register_commands()]).await?;
+                for guild in &ready.guilds {
+                    let modules = get_active_modules(&pool, guild.id).await?;
+                    register_in_guild(ctx, &get_active_commands(modules), guild.id).await?;
+                    info!("Loaded modules for guild {}", guild.id);
+                }
                 let reaction_msgs: Vec<_> = query!("SELECT message_id FROM reaction_roles")
                     .fetch_all(&pool)
                     .await?;

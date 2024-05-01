@@ -6,7 +6,7 @@ use poise::serenity_prelude::{
     CacheHttp, EmojiId, GuildId, Mentionable, Message, Reaction, ReactionCollector, ReactionType,
     RoleId,
 };
-use sqlx::query;
+use sqlx::{query, query_as};
 use tracing::{debug, error, info, warn};
 
 use crate::commands::link_message;
@@ -170,12 +170,24 @@ async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<()
     done!(ctx);
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, guild_only)]
 pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.defer().await?;
-    let reaction_roles = query!("SELECT * FROM reaction_roles")
+    let reaction_roles = if ctx.framework().options.owners.contains(&ctx.author().id) {
+        ctx.defer_ephemeral().await?;
+        query_as!(ReactionRole, "SELECT * FROM reaction_roles")
+            .fetch_all(&ctx.data().database)
+            .await?
+    } else {
+        ctx.defer().await?;
+        let guild = ctx.guild_id().expect("guild_only");
+        query_as!(
+            ReactionRole,
+            "SELECT * FROM reaction_roles WHERE guild_id = $1",
+            guild.get() as i64
+        )
         .fetch_all(&ctx.data().database)
-        .await?;
+        .await?
+    };
     let mut roles = Vec::from(["**Message | Emoji | Role**".to_string()]);
     for reaction_role in reaction_roles {
         let emoji = get_emoji_from_id(ctx, reaction_role.emoji_id).await?;
@@ -320,9 +332,9 @@ pub(crate) async fn change_reaction_role(
 
 #[allow(dead_code)]
 struct ReactionRole {
-    message_id: u64,
-    channel_id: u64,
-    guild_id: u64,
-    role_id: u64,
-    emoji_id: u64,
+    message_id: i64,
+    channel_id: i64,
+    guild_id: i64,
+    role_id: i64,
+    emoji_id: i64,
 }

@@ -10,8 +10,10 @@ use sqlx::PgPool;
 use sqlx::{query, query_as};
 use tracing::{info, warn};
 
-use crate::commands::feature_state::FeatureState;
-use crate::commands::feature_state::FeatureState::*;
+use crate::commands::utility::feature_state::FeatureState;
+use crate::commands::utility::feature_state::FeatureState::{
+    All, Implemented, Postponed, Rejected, ToDo,
+};
 use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::easy_embed::EasyEmbed;
 use crate::{Context, Error};
@@ -187,7 +189,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
             )
             .await?;
     }
-    remove_components_but_keep_embeds(ctx, reply_handle).await
+    remove_components_but_keep_embeds(ctx, CreateReply::default(), reply_handle).await
 }
 
 fn make_feature_embeds<T: EasyEmbed>(

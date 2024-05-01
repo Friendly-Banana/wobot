@@ -81,11 +81,12 @@ async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> Result<String, Error>
 
 pub(crate) async fn remove_components_but_keep_embeds(
     ctx: Context<'_>,
+    mut m: CreateReply,
     reply: ReplyHandle<'_>,
 ) -> Result<(), Error> {
-    let emoji_embeds = reply.message().await?;
-    let mut m = CreateReply::default();
-    m.embeds = emoji_embeds
+    let original = reply.message().await?;
+    m = m.components(Vec::new());
+    m.embeds = original
         .embeds
         .to_owned()
         .into_iter()

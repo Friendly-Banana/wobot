@@ -1,27 +1,19 @@
 use poise::serenity_prelude::{ChannelId, GuildId, MessageId};
 
 pub(crate) use self::{
-    animal::*, bot::*, capybara::*, cruisine::*, cutie_pie::*, emoji::*, events::*, features::*,
-    fun::*, meme::*, mensa::*, moderation::*, obama::*, owner::*, reaction_role::*, reminder::*,
+    boop::*, cruisine::*, events::*, images::*, keyword_statistics::*, mensa::*, misc::*,
+    modules::*, owner::*, reaction_role::*, utility::*, uwu::*,
 };
 
-mod animal;
-mod bot;
-mod capybara;
 mod cruisine;
-mod cutie_pie;
-mod emoji;
 mod events;
-mod feature_state;
-mod features;
-mod fun;
-mod meme;
+mod images;
 mod mensa;
-mod moderation;
-mod obama;
+mod misc;
+mod modules;
 mod owner;
 mod reaction_role;
-mod reminder;
+mod utility;
 mod utils;
 
 pub(crate) fn link_message(guild: Option<GuildId>, channel_id: i64, msg_id: i64) -> String {

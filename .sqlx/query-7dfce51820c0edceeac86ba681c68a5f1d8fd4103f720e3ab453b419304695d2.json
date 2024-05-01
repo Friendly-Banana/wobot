@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT * FROM reaction_roles WHERE guild_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "guild_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "role_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "emoji_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7dfce51820c0edceeac86ba681c68a5f1d8fd4103f720e3ab453b419304695d2"
+}

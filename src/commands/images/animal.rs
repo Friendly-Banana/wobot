@@ -1,6 +1,5 @@
 use std::convert::identity;
 use std::ops::Range;
-use std::sync::atomic::Ordering::SeqCst;
 
 use poise::serenity_prelude::CreateEmbed;
 use poise::{command, CreateReply};
@@ -30,7 +29,7 @@ pub async fn animal(ctx: Context<'_>, cat_fact: Option<bool>) -> Result<(), Erro
 const API_RANGE: Range<i32> = 0..7;
 async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<String, Error> {
     #[cfg(test)]
-    let api_choice = tests::API_CHOICE.load(SeqCst);
+    let api_choice = tests::API_CHOICE.load(std::sync::atomic::Ordering::SeqCst);
     #[cfg(not(test))]
     let api_choice = thread_rng().gen_range(API_RANGE);
 
@@ -131,6 +130,7 @@ async fn random_cat_fact() -> Result<String, Error> {
     Ok(response.json::<MeowFacts>().await?.data.remove(0))
 }
 
+#[allow(unused)]
 mod tests {
     use std::sync::atomic::AtomicI32;
     use std::sync::atomic::Ordering::SeqCst;
@@ -138,6 +138,7 @@ mod tests {
     use super::{get_random_image, random_cat_fact, API_RANGE};
 
     pub(crate) static API_CHOICE: AtomicI32 = AtomicI32::new(0);
+
     #[tokio::test]
     async fn test_random_image() {
         for i in API_RANGE {

@@ -44,10 +44,10 @@ impl NewEmoji {
     }
 }
 
-async fn add_emoji<T: std::error::Error + Send + Sync>(
+async fn add_emoji(
     ctx: Context<'_>,
     name: String,
-    data: Result<Vec<u8>, T>,
+    data: Vec<u8>,
     content_type: &String,
 ) -> Result<(), Error> {
     let partial_guild = match ctx.partial_guild().await {
@@ -59,39 +59,18 @@ async fn add_emoji<T: std::error::Error + Send + Sync>(
         Some(guild) => guild,
     };
     if partial_guild.emojis.iter().any(|(_, e)| e.name == name) {
-        ctx.reply("There already is an emoji with the same name")
-            .await?;
+        ctx.reply(format!(
+            "There already is an emoji with the same name {name}"
+        ))
+        .await?;
         return Ok(());
     }
-    let content = match data {
-        Ok(content) => content,
-        Err(why) => {
-            error!("Error downloading image: {:?}", why);
-            ctx.reply("Error downloading image").await?;
-            return Ok(());
-        }
-    };
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&content);
+
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
     let data = format!("data:{};base64,{}", content_type, b64);
-    let guild = ctx.guild_id().expect("guild_only");
-    guild.create_emoji(ctx.http(), &name, &data).await?;
+    let emoji = partial_guild.create_emoji(ctx.http(), &name, &data).await?;
 
-    let emojis = guild.emojis(ctx.http()).await?;
-    let emoji = emojis
-        .iter()
-        .find(|e| e.name == name)
-        .expect("we just added it");
-
-    let animated = if content_type.contains(ANIMATED_EMOJI_FORMAT) {
-        "a"
-    } else {
-        ""
-    };
-    ctx.reply(format!(
-        "Added new emoji <{}:{}:{}>",
-        animated, emoji.name, emoji.id
-    ))
-    .await?;
+    ctx.reply(format!("Added new emoji {emoji}")).await?;
     Ok(())
 }
 
@@ -100,7 +79,7 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
 
     let add_uuid = format!("{}add", ctx.id());
     let cancel_uuid = format!("{}cancel", ctx.id());
-    let amount_emojis = emojis.len();
+    let mut amount_emojis = emojis.len();
 
     let mut reply = {
         let components = vec![CreateActionRow::Buttons(vec![
@@ -135,21 +114,27 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
             mci.defer(ctx.http()).await?;
             if mci.data.custom_id == add_uuid {
                 for emoji in emojis {
-                    let bytes = match HTTP_CLIENT.get(emoji.url).send().await {
-                        Ok(content) => content.bytes().await,
-                        Err(why) => {
-                            error!("Error downloading emoji: {:?}", why);
-                            ctx.reply("Error downloading emoji").await?;
-                            return Ok(());
+                    // TODO refactor once async closures become available
+                    let response = HTTP_CLIENT.get(emoji.url).send().await;
+                    if let Ok(body) = response {
+                        let result = body.bytes().await;
+                        if let Ok(bytes) = result {
+                            if add_emoji(ctx, emoji.name, bytes.to_vec(), &emoji.content_type)
+                                .await
+                                .is_err()
+                            {
+                                amount_emojis -= 1;
+                            }
+                        } else {
+                            error!("Error decoding emoji: {:?}", result);
+                            ctx.reply("Error decoding emoji").await?;
+                            amount_emojis -= 1;
                         }
-                    };
-                    add_emoji(
-                        ctx,
-                        emoji.name,
-                        bytes.map(|b| b.to_vec()),
-                        &emoji.content_type,
-                    )
-                    .await?;
+                    } else {
+                        error!("Error downloading emoji: {:?}", response);
+                        ctx.reply("Error downloading emoji").await?;
+                        amount_emojis -= 1;
+                    }
                 }
                 format!("Added {} emojis.", amount_emojis)
             } else {
@@ -157,8 +142,8 @@ async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> R
             }
         }
     };
-    ctx.reply(answer).await?;
-    remove_components_but_keep_embeds(ctx, reply_handle).await
+    remove_components_but_keep_embeds(ctx, CreateReply::default().content(answer), reply_handle)
+        .await
 }
 
 fn extract_emojis(content: String) -> Vec<NewEmoji> {
@@ -267,7 +252,7 @@ pub(crate) async fn upload(ctx: Context<'_>, name: String, image: Attachment) ->
                 return Ok(());
             }
             ctx.defer().await?;
-            add_emoji(ctx, name, image.download().await, content_type).await
+            add_emoji(ctx, name, image.download().await?, content_type).await
         }
     }
 }
