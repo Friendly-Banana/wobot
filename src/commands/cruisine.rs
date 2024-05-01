@@ -77,7 +77,7 @@ pub(crate) async fn add(
     let pos = MensaPosition {
         x: letter as u8 - MIN_X as u8,
         y: number - MIN_Y,
-        expires: Utc::now() + (duration),
+        expires: Utc::now() + duration,
     };
     {
         let mut m = ctx.data().mensa_state.write().unwrap();

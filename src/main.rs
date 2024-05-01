@@ -52,6 +52,8 @@ struct Config {
 /// User data, which is stored and accessible in all command invocations
 #[derive(Debug)]
 pub(crate) struct Data {
+    cat_api_token: String,
+    dog_api_token: String,
     database: PgPool,
     bot_id: RwLock<UserId>,
     announcement_channel: HashMap<GuildId, ChannelId>,
@@ -84,6 +86,7 @@ async fn poise(
         obama(),
         cutie_pie(),
         capy(),
+        animal(),
         keyword_statistics(),
         boop(),
         uwu(),
@@ -130,6 +133,8 @@ async fn poise(
                 check_reminders(ctx.clone(), pool.clone(), Duration::from_secs(60));
                 info!("Started reminder thread");
                 Ok(Data {
+                    cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
+                    dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
                     database: pool,
                     bot_id: RwLock::new(ready.user.id),
                     excluded_channels: RwLock::new(config.excluded_channels),
