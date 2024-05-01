@@ -97,7 +97,6 @@ async fn poise(
         features(),
         keyword_statistics(),
         latency(),
-        meme(),
         mensa(),
         modules(),
         obama(),
