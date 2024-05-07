@@ -12,13 +12,13 @@ use tracing::{debug, error, info, warn};
 use crate::commands::link_message;
 use crate::{done, Context, Data, Error};
 
-const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(30);
+const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[poise::command(
     slash_command,
     prefix_command,
     guild_only,
-    subcommands("list", "add_easy", "add", "remove_easy")
+    subcommands("list", "add_easy", "add", "remove")
 )]
 pub(crate) async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
@@ -39,7 +39,7 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
     let reaction = match reaction {
         None => {
             info!("Timeout :(, try again");
-            ctx.say("Timeout :(, try again").await?;
+            ctx.reply("Timeout :(, try again").await?;
             return Ok(());
         }
         Some(r) => r,
@@ -56,19 +56,19 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn add(
     ctx: Context<'_>,
-    role_id: RoleId,
-    message: Message,
-    reaction_type: ReactionType,
+    role: RoleId,
+    #[description = "Existing Message to react to"] message: Message,
+    emoji: ReactionType,
 ) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
-    add_reaction_role(ctx, role_id, message, reaction_type).await
+    add_reaction_role(ctx, role, message, emoji).await
 }
 
 async fn add_reaction_role(
     ctx: Context<'_>,
     role_id: RoleId,
     message: Message,
-    reaction_type: ReactionType,
+    reaction: ReactionType,
 ) -> Result<(), Error> {
     let mut roles = ctx
         .guild_id()
@@ -81,7 +81,7 @@ async fn add_reaction_role(
         return Ok(());
     }
 
-    if let ReactionType::Custom { id, .. } = reaction_type {
+    if let ReactionType::Custom { id, .. } = reaction {
         if ctx
             .guild_id()
             .expect("guild_only")
@@ -97,34 +97,34 @@ async fn add_reaction_role(
     }
 
     let role = roles.remove(&role_id).expect("role exists");
-    let inserted = {
-        let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
-        reaction_roles.insert(message.id.into())
-    };
-    if !inserted {
-        info!("Duplicate reaction role, role already assigned to this message");
-        ctx.say("Duplicate reaction role, role already assigned to this message")
+    info!(
+        "Adding reaction role '{}' here {} with emoji {}...",
+        role.name,
+        message.link(),
+        reaction
+    );
+
+    let emoji_id = get_emoji_id(reaction.clone(), ctx.data()).await?;
+    let guild_id = ctx.guild_id().expect("guild_only");
+    if let Err(e) = query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
+        message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
+    ).execute(&ctx.data().database).await {
+        info!("Adding failed, possible duplicate: {e}");
+        ctx.say("Assigning failed, is the role/emoji already assigned to this message?")
             .await?;
         return Ok(());
     }
-    let emoji_id = get_emoji_id(reaction_type.clone(), ctx.data()).await?;
-    let guild_id = ctx.guild_id().expect("guild_only");
-    query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
-        message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
-    ).execute(&ctx.data().database).await?;
+    {
+        let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
+        reaction_roles.insert(message.id.into())
+    };
 
-    info!(
-        "Added reaction role {} here {} with emoji {}",
-        role,
-        message.link(),
-        reaction_type
-    );
-    message.react(ctx.http(), reaction_type).await?;
+    message.react(ctx.http(), reaction).await?;
     done!(ctx);
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn remove(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
     ctx.say("React to the message").await?;
 
@@ -149,16 +149,12 @@ pub(crate) async fn remove_easy(ctx: Context<'_>) -> Result<(), Error> {
 
 async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<(), Error> {
     info!(
-        "Removing reaction role here {} with emoji {}",
+        "Removing reaction role here {} with emoji {}...",
         reaction
             .message_id
             .link(reaction.channel_id, reaction.guild_id),
         reaction.emoji
     );
-    {
-        let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
-        reaction_roles.remove(&reaction.message_id.get());
-    }
     let emoji_id = get_emoji_id(reaction.emoji, ctx.data()).await?;
     query!(
         "DELETE FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
@@ -167,6 +163,10 @@ async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<()
     )
     .execute(&ctx.data().database)
     .await?;
+    {
+        let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
+        reaction_roles.remove(&reaction.message_id.get());
+    }
     done!(ctx);
 }
 
@@ -206,8 +206,8 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn get_emoji_id(reaction_type: ReactionType, data: &Data) -> Result<i64, Error> {
-    match reaction_type {
+async fn get_emoji_id(reaction: ReactionType, data: &Data) -> Result<i64, Error> {
+    match reaction {
         ReactionType::Custom { id, .. } => Ok(id.get() as i64),
         ReactionType::Unicode(unicode) => {
             query!(

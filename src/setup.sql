@@ -43,6 +43,5 @@ create table public.reaction_roles
     guild_id   bigint not null,
     role_id    bigint not null,
     emoji_id   bigint not null,
-    primary key (emoji_id, message_id),
-    foreign key (emoji_id) references public.unicode_to_emoji (id)
+    primary key (emoji_id, message_id)
 );
