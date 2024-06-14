@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::ops::AddAssign;
+use std::ops::{Add, AddAssign};
 
-use chrono::{Datelike, Duration, Local, Weekday};
+use chrono::{Datelike, Duration, Local, Timelike, Weekday};
 use itertools::Itertools;
 use percent_encoding::utf8_percent_encode;
 use poise::serenity_prelude::CreateEmbed;
@@ -66,11 +66,6 @@ struct WeekMenu {
 }
 
 #[poise::command(slash_command, prefix_command, subcommands("next", "week", "list"))]
-pub(crate) async fn canteen(_: Context<'_>) -> Result<(), Error> {
-    Ok(())
-}
-
-#[poise::command(slash_command, prefix_command, subcommands("next", "week", "list"))]
 pub(crate) async fn mensa(_: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
@@ -120,7 +115,7 @@ async fn list(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// show the next weekday's menu (might be today)
+/// show the next weekday's menu (might be today), switches to next day after 20:00
 #[poise::command(slash_command, prefix_command)]
 async fn next(
     ctx: Context<'_>,
@@ -129,9 +124,13 @@ async fn next(
     ctx.defer().await?;
     let (canteen, mut menu) = get_menu(canteen_name).await?;
     let mut now = Local::now().with_timezone(&TIMEZONE);
+    if now.hour() >= 20 {
+        now = now.add(Duration::days(1));
+    }
     while now.weekday() == Weekday::Sat || now.weekday() == Weekday::Sun {
         now.add_assign(Duration::days(1));
     }
+
     let index = menu
         .days
         .iter()

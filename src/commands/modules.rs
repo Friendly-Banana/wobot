@@ -113,8 +113,8 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
     let mut commands = Vec::new();
     for module in modules {
         commands.extend(match module {
-            Module::Canteen => vec![canteen(), mensa(), cruisine()],
-            Module::Images => vec![animal(), capy(), cutie_pie(), obama()],
+            Module::Canteen => vec![mensa(), mp()],
+            Module::Images => vec![floof(), capy(), cutie_pie(), obama()],
             Module::Owner => vec![activity(), exclude(), latency(), servers()],
             Module::Utility => vec![clear(), emoji(), features(), reminder(), react(), say()],
             Module::Events => vec![event(), export_events(), reaction_role()],

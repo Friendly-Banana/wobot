@@ -1,14 +1,14 @@
 use poise::serenity_prelude::{ChannelId, GuildId, MessageId};
 
 pub(crate) use self::{
-    boop::*, cruisine::*, events::*, images::*, keyword_statistics::*, mensa::*, misc::*,
+    boop::*, events::*, images::*, keyword_statistics::*, mensa::*, mensaplan::*, misc::*,
     modules::*, owner::*, reaction_role::*, utility::*, uwu::*,
 };
 
-mod cruisine;
 mod events;
 mod images;
 mod mensa;
+mod mensaplan;
 mod misc;
 mod modules;
 mod owner;

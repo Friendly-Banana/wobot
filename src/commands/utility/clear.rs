@@ -9,26 +9,35 @@ use crate::{Context, Error};
     slash_command,
     prefix_command,
     ephemeral,
-    required_permissions = "MANAGE_MESSAGES",
     required_bot_permissions = "MANAGE_MESSAGES"
 )]
 pub(crate) async fn clear(
     ctx: Context<'_>,
     #[description = "between 2 and 100, default 2"] amount: Option<u8>,
-    #[description = "Message to delete before"] message: Option<Message>,
+    before: Option<Message>,
 ) -> Result<(), Error> {
+    let is_mod = ctx
+        .author_member()
+        .await
+        .is_some_and(|member| member.permissions.unwrap().manage_messages());
+    if !(is_mod || ctx.framework().options.owners.contains(&ctx.author().id)) {
+        ctx.say("You do not have permission to use this command")
+            .await?;
+        return Ok(());
+    }
+
     let amount = amount.unwrap_or(2);
     if amount < 2 || amount > 100 {
         ctx.say("Amount must be between 2 and 100").await?;
         return Ok(());
     }
-    let mut b = GetMessages::new();
-    if let Some(msg) = message {
-        b = b.before(msg.id);
+    let mut get_messages = GetMessages::new();
+    if let Some(msg) = before {
+        get_messages = get_messages.before(msg.id);
     }
     let msgs = ctx
         .channel_id()
-        .messages(ctx.http(), b.limit(amount))
+        .messages(ctx.http(), get_messages.limit(amount))
         .await?;
     let actual_amount = msgs.len();
     if actual_amount < 2 {

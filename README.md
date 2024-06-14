@@ -21,7 +21,6 @@ simply react with the emojis you want
 
 ##### MEMEs:
 
-Meme generator, you can use any image from the internet  
 Obama: when someone congratulates themselves  
 Cutie Pie: tell your friends how cute they are
 
@@ -50,21 +49,49 @@ Not yet convinced? Have some images:
 ![](images/obama.png)
 ![](images/cutie_pie.png)
 
-## Technical
+## Contributing
 
-WoBot is a Discord Bot written in [Rust](https://www.rust-lang.org/)
-with [Poise](https://github.com/serenity-rs/poise/).
-It's hosted on [Shuttle](https://www.shuttle.rs/) and requires a PostgresQL database.
+If you have a great idea or suggestion, feel free to open [an issue](https://github.com/Friendly-Banana/wobot/issues).
+If you want this feature right now and can code, open [a pull request](https://github.com/Friendly-Banana/wobot/pulls).
+Please make sure to run `cargo fmt` before committing.
 
-The mensa plan uses the [Eat API](https://tum-dev.github.io/eat-api), the mensa coordinates link
-to [Google Maps](https://www.google.com/maps).
+### Running the Bot
+
+1. [Install Rust](https://www.rust-lang.org/tools/install)
+2. [Install Shuttle](https://docs.shuttle.rs/getting-started/installation)
+3. Optional: [Install PostgresQL](https://www.postgresql.org/download/), you can also use a Docker container
+4. Change the Database URL (`postgres://test:pass@localhost:5432/postgres`) in `main.rs` and `.env` to your local
+   PostgresQL instance, leave it blank to use Docker.
+5. Execute `setup.sql` in your DB
+6. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
+7. Copy the bot token and put it in a `Secrets.toml` file in the root directory:
+    ```toml
+    DISCORD_TOKEN = "your token here"
+    ```
+   You can also create a `Secrets.dev.toml` file if you want to test with different tokens in development.
+8. Invite the bot to your server with the `ADMINISTRATOR` permission, you can also only choose the permissions you need.
+9. Run the bot with `cargo run`
 
 Some features also require a font and images from the `assets` folder.
 Due to legal reasons, not all of them can be provided here. What's missing:
 
 - `Rockwill.ttf`: [Rockwill](https://fontmeme.com/fonts/rockwill-font/)
 - `obama_medal.jpg`: [Obama Medal](https://a.pinatafarm.com/1015x627/ade80aa63d/obama-medal.jpg)
-- `mensa_plan.png`: [Mensa Plan](https://www.meck-architekten.de/projekte/id/2019-mensa-campus-garching/)
+- `mensa_plan.png`: [Mensa Plan](https://www.meck-architekten.de/projekte/id/2019-mensa-campus-garching/) or
+  from [here](https://www.heinze.de/architekturobjekt/zoom/12979688/)
+
+Simply download them and place them in the `assets` folder with the same name.
+
+## Technical Overview
+
+WoBot is a Discord Bot written in [Rust](https://www.rust-lang.org/)
+with [the  Poise framework](https://github.com/serenity-rs/poise/).
+It's hosted on [Shuttle](https://www.shuttle.rs/) and uses a PostgresQL database.
+
+The mensa plan uses the [Eat API](https://tum-dev.github.io/eat-api), the mensa coordinates link
+to [Google Maps](https://www.google.com/maps).
+
+The mensaplan API is written by myself and may become public in the future.
 
 ### Configuration
 
@@ -72,7 +99,7 @@ Due to legal reasons, not all of them can be provided here. What's missing:
 
 You can set up automatic reactions and replies based on keywords. All of them are case-insensitive.
 Auto-reactions also support regex and match on word boundaries, ignoring punctuation around them.
-The bot can react with both Unicode and custom Discord emojis, even animated ones.
+WoBot can react with both Unicode and custom Discord emojis, even animated ones.
 
 #### Example Config
 

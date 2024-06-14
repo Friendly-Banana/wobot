@@ -5,13 +5,11 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use anyhow::Context as _;
-use image::DynamicImage;
 use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
     ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
 };
 use poise::{Framework, PrefixFrameworkOptions};
-use regex::Regex;
 use serde::Deserialize;
 use shuttle_runtime::{CustomError, SecretStore};
 use shuttle_serenity::ShuttleSerenity;
@@ -20,24 +18,25 @@ use tracing::info;
 
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
+use crate::hashable_regex::HashableRegex;
 
 mod check_reminder;
 mod commands;
 mod constants;
 mod easy_embed;
 mod handler;
+mod hashable_regex;
 
 #[derive(Debug, Deserialize)]
 struct AutoReply {
-    keywords: Vec<String>,
+    keywords: Vec<HashableRegex>,
     user: UserId,
     title: String,
     description: String,
     #[serde(default)]
     ping: bool,
     #[serde(default)]
-    nsfw: bool,
-    #[serde(default)]
+    /// colour as an integer
     colour: Colour,
 }
 
@@ -45,7 +44,7 @@ struct AutoReply {
 struct Config {
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
     excluded_channels: HashSet<ChannelId>,
-    auto_reactions: HashMap<String, ReactionType>,
+    auto_reactions: HashMap<HashableRegex, ReactionType>,
     auto_replies: Vec<AutoReply>,
 }
 
@@ -54,15 +53,13 @@ struct Config {
 pub(crate) struct Data {
     cat_api_token: String,
     dog_api_token: String,
+    mp_api_token: String,
     database: PgPool,
-    bot_id: RwLock<UserId>,
-    announcement_channel: HashMap<GuildId, ChannelId>,
+    event_channel_per_guild: HashMap<GuildId, ChannelId>,
     excluded_channels: RwLock<HashSet<ChannelId>>,
-    auto_reactions: HashMap<ReactionType, Regex>,
+    auto_reactions: HashMap<HashableRegex, ReactionType>,
     auto_replies: Vec<AutoReply>,
     reaction_msgs: RwLock<HashSet<u64>>,
-    mensa_state: RwLock<HashMap<UserId, MensaPosition>>,
-    avatar_cache: RwLock<HashMap<UserId, DynamicImage>>,
 }
 
 type Error = Box<dyn std::error::Error + Send + Sync>;
@@ -83,12 +80,11 @@ async fn poise(
 
     let commands = vec![
         activity(),
-        animal(),
+        floof(),
         boop(),
-        canteen(),
         capy(),
         clear(),
-        cruisine(),
+        mp(),
         cutie_pie(),
         emoji(),
         event(),
@@ -140,21 +136,17 @@ async fn poise(
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
+                    mp_api_token: secret_store
+                        .get("MENSAPLAN_API_TOKEN")
+                        .unwrap_or("".to_string()),
                     database: pool,
-                    bot_id: RwLock::new(ready.user.id),
                     excluded_channels: RwLock::new(config.excluded_channels),
-                    announcement_channel: config.event_channel_per_guild,
-                    auto_reactions: config
-                        .auto_reactions
-                        .into_iter()
-                        .map(|(k, v)| (v, Regex::new(&format!("\\b{}\\b", k)).unwrap()))
-                        .collect(),
+                    event_channel_per_guild: config.event_channel_per_guild,
+                    auto_reactions: config.auto_reactions,
                     auto_replies: config.auto_replies,
                     reaction_msgs: RwLock::new(
                         reaction_msgs.iter().map(|f| f.message_id as u64).collect(),
                     ),
-                    mensa_state: RwLock::new(HashMap::new()),
-                    avatar_cache: RwLock::new(HashMap::new()),
                 })
             })
         })

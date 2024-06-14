@@ -1,12 +1,14 @@
 use anyhow::Context as _;
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
+use mini_moka::sync::Cache;
+use once_cell::sync::Lazy;
 use poise::serenity_prelude::{Colour, CreateAttachment, CreateEmbed, User};
 use poise::{CreateReply, ReplyHandle};
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
 
-use crate::constants::HTTP_CLIENT;
+use crate::constants::{HTTP_CLIENT, ONE_DAY};
 use crate::{Context, Error};
 
 const COLORS: [Colour; 19] = [
@@ -35,27 +37,28 @@ pub(crate) fn random_color() -> Colour {
     *COLORS.choose(&mut thread_rng()).unwrap()
 }
 
-pub(crate) async fn load_avatar(ctx: &Context<'_>, user: &User) -> Result<DynamicImage, Error> {
-    let cached = {
-        let cache = ctx.data().avatar_cache.read().unwrap();
-        cache.get(&user.id).cloned()
-    };
-    if let Some(img) = cached {
-        return Ok(img);
+static AVATAR_CACHE: Lazy<Cache<String, DynamicImage>> = Lazy::new(|| {
+    Cache::builder()
+        .max_capacity(50 * 1024 * 1024) // 50 MB
+        .time_to_idle(10 * ONE_DAY)
+        .weigher(|_, v: &DynamicImage| v.as_bytes().len() as u32)
+        .build()
+});
+
+pub(crate) async fn load_avatar(avatar_url: String) -> Result<DynamicImage, Error> {
+    if let Some(avatar) = AVATAR_CACHE.get(&avatar_url) {
+        return Ok(avatar);
     }
 
-    let avatar_url = get_avatar_url(&ctx, &user).await?;
-    let result = HTTP_CLIENT.get(avatar_url).send().await;
+    let result = HTTP_CLIENT.get(&avatar_url).send().await;
     let bytes = result.context("Downloading avatar failed")?.bytes().await?;
     let avatar = image::load_from_memory(&bytes)?;
-    {
-        let mut cache = ctx.data().avatar_cache.write().unwrap();
-        cache.insert(user.id, avatar.clone());
-    }
+    AVATAR_CACHE.insert(avatar_url, avatar.clone());
+
     Ok(avatar)
 }
 
-async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> Result<String, Error> {
+pub(crate) async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> Result<String, Error> {
     let partial_guild = ctx.partial_guild().await;
     if let Some(guild) = partial_guild {
         let member = guild.member(&ctx, user.id).await?;

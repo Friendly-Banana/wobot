@@ -102,7 +102,7 @@ pub(crate) async fn event(
     );
     let announcement_channel = ctx
         .data()
-        .announcement_channel
+        .event_channel_per_guild
         .get(&guild_id)
         .with_context(|| format!("No announcement channel configured for guild {guild_id}"))?;
 
@@ -163,7 +163,7 @@ mod tests {
         assert!(parse_start_and_end_date("not a date".to_string(), None).is_err());
         assert!(parse_start_and_end_date(
             "1970-01-01 00:00".to_string(),
-            Some("not a date".to_string())
+            Some("not a date".to_string()),
         )
         .is_err());
     }

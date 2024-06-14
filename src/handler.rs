@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use poise::serenity_prelude::{
     CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, Mentionable,
 };
@@ -28,34 +26,33 @@ pub(crate) async fn event_handler(
             }
 
             let content = new_message.content.to_lowercase();
-            for (reaction, keyword) in &data.auto_reactions {
+            for (keyword, reaction) in &data.auto_reactions {
                 if keyword.is_match(&content) {
                     new_message.react(&ctx.http, reaction.clone()).await?;
                 }
             }
 
-            let nsfw_channel = new_message.channel(&ctx).await?.is_nsfw();
-            let mut map = HashMap::new();
-            for reply in &data.auto_replies {
-                if !reply.nsfw || nsfw_channel {
-                    if let Some(keyword) = reply.keywords.iter().find(|&s| content.contains(s)) {
-                        map.insert(keyword, reply);
-                    }
-                }
-            }
-            for (keyword, reply) in map {
+            let matches = data
+                .auto_replies
+                .iter()
+                .filter(|r| r.keywords.iter().any(|s| s.is_match(&content)));
+
+            for reply in matches {
+                let keyword = reply.keywords.first().unwrap().to_string();
                 query!("INSERT INTO auto_replies(user_id, keyword, count) VALUES ($1, $2, 1) ON CONFLICT (keyword, user_id) DO UPDATE SET count = auto_replies.count + 1", new_message.author.id.get() as i64, keyword).execute(&data.database).await?;
-                let bot_id = data.bot_id.read().expect("bot_id").get() as i64;
-                let amount_replied = query!("INSERT INTO auto_replies(user_id, keyword, count) VALUES ($1, $2, 1) ON CONFLICT (keyword, user_id) DO UPDATE SET count = auto_replies.count + 1 RETURNING count", bot_id, keyword)
+                let stats = query!(
+                    "SELECT count(*) as count FROM auto_replies WHERE keyword = $1",
+                    keyword
+                )
                 .fetch_one(&data.database)
-                .await?
-                .count;
+                .await?;
+                let amount_replied = stats.count.unwrap_or_default().to_string();
 
                 let user = reply.user.to_user(ctx.http()).await?;
                 let desc = reply
                     .description
                     .replace("{user}", &user.to_string())
-                    .replace("{replies}", &amount_replied.to_string());
+                    .replace("{replies}", &amount_replied);
                 let mut m = CreateMessage::new();
                 // embeds can't ping
                 if reply.ping {
