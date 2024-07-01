@@ -48,8 +48,13 @@ jobs:
       - name: Install dependencies
         run: cargo fetch
 
+      - name: Print the version used in the tools
+        run: |
+          cargo --version
+          cargo clippy --version
+
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --no-deps --all-targets --all-features -- -D warnings
 
       - name: Run Tests
         run: cargo test --all-targets --all-features
