@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use poise::serenity_prelude::CreateEmbed;
 use poise::{command, CreateReply};
+#[cfg(not(test))]
 use rand::{thread_rng, Rng};
 use serde::Deserialize;
 
@@ -121,7 +122,7 @@ mod tests {
             API_CHOICE.store(i, SeqCst);
             get_random_image("", "")
                 .await
-                .expect(&format!("Failed to get random image from API {}", i));
+                .unwrap_or_else(|_| panic!("Failed to get random image from API {}", i));
         }
     }
 }
