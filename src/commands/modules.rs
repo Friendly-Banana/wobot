@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use poise::builtins::register_in_guild;
 use poise::{ChoiceParameter, Command};
 use sqlx::{query, PgPool};
 
@@ -32,7 +33,7 @@ impl From<i32> for Module {
             3 => Module::Utility,
             4 => Module::Events,
             5 => Module::Misc,
-            _ => panic!("Invalid value"),
+            _ => panic!("Invalid module value"),
         }
     }
 }
@@ -71,6 +72,8 @@ pub(crate) async fn enable(ctx: Context<'_>, module: Module) -> Result<(), Error
     )
     .execute(&ctx.data().database)
     .await?;
+    let modules = get_active_modules(&ctx.data().database, guild).await?;
+    register_in_guild(ctx, &get_active_commands(modules), guild).await?;
 
     ctx.reply(format!("Module {} enabled", module.name()))
         .await?;
@@ -89,6 +92,8 @@ pub(crate) async fn disable(ctx: Context<'_>, module: Module) -> Result<(), Erro
     )
     .execute(&ctx.data().database)
     .await?;
+    let modules = get_active_modules(&ctx.data().database, guild).await?;
+    register_in_guild(ctx, &get_active_commands(modules), guild).await?;
 
     ctx.reply(format!("Module {} disabled", module.name()))
         .await?;
@@ -115,7 +120,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
         commands.extend(match module {
             Module::Canteen => vec![mensa(), mp()],
             Module::Images => vec![floof(), capy(), cutie_pie(), obama()],
-            Module::Owner => vec![activity(), exclude(), latency(), servers()],
+            Module::Owner => vec![activity(), latency(), servers()],
             Module::Utility => vec![clear(), emoji(), features(), reminder(), react(), say()],
             Module::Events => vec![event(), export_events(), reaction_role()],
             Module::Misc => vec![boop(), keyword_statistics(), uwu(), uwu_text(), ping()],

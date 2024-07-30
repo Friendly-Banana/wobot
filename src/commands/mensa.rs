@@ -95,11 +95,8 @@ async fn list(ctx: Context<'_>) -> Result<(), Error> {
     for c in canteens.chunks(DISCORD_FIELDS_ON_AN_EMBED_LIMIT) {
         let mut embed = CreateEmbed::default();
         for canteen in c {
-            let mut description = format!(
-                "[{}]({})",
-                canteen.location.address,
-                link_location(&canteen)
-            );
+            let mut description =
+                format!("[{}]({})", canteen.location.address, link_location(canteen));
             if queue_statuses.contains_key(&canteen.canteen_id) {
                 let queue_status = queue_statuses.get(&canteen.canteen_id).unwrap();
                 description.push_str(&format!(
@@ -221,7 +218,7 @@ fn link_location(canteen: &Canteen) -> String {
 }
 
 async fn get_emojis_for_labels() -> Result<HashMap<String, String>, Error> {
-    return Ok(HTTP_CLIENT
+    Ok(HTTP_CLIENT
         .get(format!("{}/enums/labels.json", EAT_API_URL))
         .send()
         .await?
@@ -229,16 +226,16 @@ async fn get_emojis_for_labels() -> Result<HashMap<String, String>, Error> {
         .await?
         .into_iter()
         .map(|l| (l.enum_name, l.abbreviation))
-        .collect());
+        .collect())
 }
 
 async fn get_canteens() -> reqwest::Result<Vec<Canteen>> {
-    return HTTP_CLIENT
+    HTTP_CLIENT
         .get(format!("{}/enums/canteens.json", EAT_API_URL))
         .send()
         .await?
         .json::<Vec<Canteen>>()
-        .await;
+        .await
 }
 
 async fn get_menu(canteen_name: Option<String>) -> Result<(Canteen, WeekMenu), Error> {

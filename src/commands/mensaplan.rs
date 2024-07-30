@@ -185,7 +185,7 @@ pub(crate) async fn delete(ctx: Context<'_>) -> Result<(), Error> {
     .await?;
 
     ctx.reply("Position deleted").await?;
-    return Ok(());
+    Ok(())
 }
 
 /// see the plan
@@ -270,14 +270,11 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
 
     let number = str::parse::<u8>(&chars.into_iter().collect::<String>())?;
 
-    if letter < MIN_X || letter > MAX_X || number < MIN_Y || number > MAX_Y {
-        return Err(anyhow!(
-            "Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}"
-        )
-        .into());
+    if (MIN_X..=MAX_X).contains(&letter) && (MIN_Y..=MAX_Y).contains(&number) {
+        Ok((letter, number))
+    } else {
+        Err(anyhow!("Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}").into())
     }
-
-    Ok((letter, number))
 }
 
 #[cfg(test)]

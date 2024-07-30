@@ -27,7 +27,7 @@ pub(crate) async fn clear(
     }
 
     let amount = amount.unwrap_or(2);
-    if amount < 2 || amount > 100 {
+    if !(2..=100).contains(&amount) {
         ctx.say("Amount must be between 2 and 100").await?;
         return Ok(());
     }

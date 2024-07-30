@@ -91,9 +91,9 @@ pub(crate) async fn remove_components_but_keep_embeds(
     m = m.components(Vec::new());
     m.embeds = original
         .embeds
-        .to_owned()
-        .into_iter()
-        .map(|e| CreateEmbed::from(e))
+        .iter()
+        .cloned()
+        .map(CreateEmbed::from)
         .collect();
     reply.edit(ctx, m).await?;
     Ok(())

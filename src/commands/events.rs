@@ -121,7 +121,7 @@ fn parse_start_and_end_date(
     start: String,
     end: Option<String>,
 ) -> Result<(DateTime<Tz>, DateTime<Tz>), Error> {
-    const TIME_FORMAT: &'static str = "%Y-%m-%d %H:%M";
+    const TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
 
     let start_date = NaiveDateTime::parse_from_str(&start, TIME_FORMAT)
         .map(|date| date.and_local_timezone(TIMEZONE).unwrap())

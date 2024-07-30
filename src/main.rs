@@ -43,7 +43,6 @@ struct AutoReply {
 #[derive(Deserialize)]
 struct Config {
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
-    excluded_channels: HashSet<ChannelId>,
     auto_reactions: HashMap<HashableRegex, ReactionType>,
     auto_replies: Vec<AutoReply>,
 }
@@ -56,7 +55,6 @@ pub(crate) struct Data {
     mp_api_token: String,
     database: PgPool,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
-    excluded_channels: RwLock<HashSet<ChannelId>>,
     auto_reactions: HashMap<HashableRegex, ReactionType>,
     auto_replies: Vec<AutoReply>,
     reaction_msgs: RwLock<HashSet<u64>>,
@@ -78,6 +76,11 @@ async fn poise(
     let config_data = read_to_string("assets/config.hjson").context("Couldn't load config file")?;
     let config: Config = deser_hjson::from_str(&config_data).context("Bad config")?;
 
+    sqlx::migrate!()
+        .run(&pool)
+        .await
+        .context("Migrations failed")?;
+
     let commands = vec![
         activity(),
         floof(),
@@ -88,7 +91,6 @@ async fn poise(
         cutie_pie(),
         emoji(),
         event(),
-        exclude(),
         export_events(),
         features(),
         keyword_statistics(),
@@ -140,7 +142,6 @@ async fn poise(
                         .get("MENSAPLAN_API_TOKEN")
                         .unwrap_or("".to_string()),
                     database: pool,
-                    excluded_channels: RwLock::new(config.excluded_channels),
                     event_channel_per_guild: config.event_channel_per_guild,
                     auto_reactions: config.auto_reactions,
                     auto_replies: config.auto_replies,

@@ -38,7 +38,7 @@ impl NewEmoji {
         };
         NewEmoji {
             name: name.to_string(),
-            url: format!("{}{}.{}", EMOJI_URL, id.to_string(), format),
+            url: format!("{}{}.{}", EMOJI_URL, id, format),
             content_type: "image/".to_string() + format,
         }
     }
@@ -244,7 +244,7 @@ pub(crate) async fn upload(ctx: Context<'_>, name: String, image: Attachment) ->
     match &image.content_type {
         None => {
             ctx.reply("Not an image").await?;
-            return Ok(());
+            Ok(())
         }
         Some(content_type) => {
             if !content_type.starts_with("image/") {
