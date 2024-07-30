@@ -1,19 +1,19 @@
 [package]
-name = "robot"
-version = "0.8.0"
+name = "wobot"
+version = "1.0.0"
 edition = "2021"
 publish = false
 
 [dependencies]
 anyhow = "1.0.82"
 poise = { version = "0.6.1", features = ["cache", "chrono"] }
-shuttle-serenity = "0.46.0"
-shuttle-runtime = "0.46.0"
-shuttle-shared-db = { version = "0.46.0", default-features = false, features = ["postgres", "sqlx"] }
+shuttle-serenity = "0.47.0"
+shuttle-runtime = "0.47.0"
+shuttle-shared-db = { version = "0.47.0", default-features = false, features = ["postgres", "sqlx"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
-tokio = "1.38"
-sqlx = { version = "0.7", default-features = false, features = ["runtime-tokio", "tls-rustls", "chrono", "postgres", "sqlx-postgres", "bigdecimal"] }
+tokio = "1.39.2"
+sqlx = { version = "0.7.4", default-features = false, features = ["runtime-tokio", "tls-rustls", "chrono", "postgres", "sqlx-postgres", "bigdecimal"] }
 base64 = "0.22"
 regex = "1.10"
 reqwest = { version = "0.12", features = ["json"] }
