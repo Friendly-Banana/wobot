@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT count(*) as count FROM auto_replies WHERE keyword = $1",
+  "query": "SELECT SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%'",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "count",
-        "type_info": "Int8"
+        "type_info": "Int4"
       }
     ],
     "parameters": {
@@ -18,5 +18,5 @@
       null
     ]
   },
-  "hash": "df87ad24dcaab2123b7df5f46fe6f5359f3bbcab5d38210fa74532c55d91a117"
+  "hash": "26d6c4a6f43b05e4be37a9d21a5a91a24a270943edc2b8b4c01338b389364993"
 }

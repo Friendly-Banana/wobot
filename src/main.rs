@@ -5,6 +5,7 @@ use std::sync::RwLock;
 use std::time::Duration;
 
 use anyhow::Context as _;
+use itertools::Itertools;
 use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
     ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
@@ -18,18 +19,16 @@ use tracing::info;
 
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
-use crate::hashable_regex::HashableRegex;
 
 mod check_reminder;
 mod commands;
 mod constants;
 mod easy_embed;
 mod handler;
-mod hashable_regex;
 
 #[derive(Debug, Deserialize)]
 struct AutoReply {
-    keywords: Vec<HashableRegex>,
+    keywords: Vec<String>,
     user: UserId,
     title: String,
     description: String,
@@ -43,7 +42,7 @@ struct AutoReply {
 #[derive(Deserialize)]
 struct Config {
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
-    auto_reactions: HashMap<HashableRegex, ReactionType>,
+    auto_reactions: HashMap<String, ReactionType>,
     auto_replies: Vec<AutoReply>,
 }
 
@@ -55,7 +54,7 @@ pub(crate) struct Data {
     mp_api_token: String,
     database: PgPool,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
-    auto_reactions: HashMap<HashableRegex, ReactionType>,
+    auto_reactions: Vec<(String, ReactionType)>,
     auto_replies: Vec<AutoReply>,
     reaction_msgs: RwLock<HashSet<u64>>,
 }
@@ -143,7 +142,7 @@ async fn poise(
                         .unwrap_or("".to_string()),
                     database: pool,
                     event_channel_per_guild: config.event_channel_per_guild,
-                    auto_reactions: config.auto_reactions,
+                    auto_reactions: config.auto_reactions.into_iter().collect_vec(),
                     auto_replies: config.auto_replies,
                     reaction_msgs: RwLock::new(
                         reaction_msgs.iter().map(|f| f.message_id as u64).collect(),

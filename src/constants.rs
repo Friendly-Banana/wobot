@@ -16,7 +16,7 @@ pub(crate) const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
 pub(crate) const ONE_YEAR: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
 pub(crate) const WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
-pub(crate) const FONT_PATH: &str = "assets/Rockwill.ttf";
+pub(crate) const FONT_PATH: &str = "assets/rockwill.ttf";
 pub(crate) static FONT: Lazy<Font> = Lazy::new(|| {
     info!("Loading font");
     let mut font_data = Vec::new();
@@ -28,4 +28,12 @@ pub(crate) static FONT: Lazy<Font> = Lazy::new(|| {
     Font::try_from_vec(font_data).expect("Failed to parse font")
 });
 
-pub(crate) static HTTP_CLIENT: Lazy<ReqwestClient> = Lazy::new(ReqwestClient::new);
+static USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),);
+
+pub(crate) static HTTP_CLIENT: Lazy<ReqwestClient> = Lazy::new(|| {
+    ReqwestClient::builder()
+        .timeout(Duration::from_secs(10))
+        .user_agent(USER_AGENT)
+        .build()
+        .expect("HTTP client")
+});

@@ -20,7 +20,7 @@ pub async fn floof(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-const API_RANGE: Range<i32> = 0..6;
+const API_RANGE: Range<i32> = 0..5;
 async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<String, Error> {
     #[cfg(test)]
     let api_choice = tests::API_CHOICE.load(std::sync::atomic::Ordering::SeqCst);
@@ -31,12 +31,11 @@ async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<St
         0 => do_json::<TopLevelImage>("https://randomfox.ca/floof/").await,
         1 => do_json::<TopLevelURL>("https://random.dog/woof.json").await,
         2 => do_json::<DogCEO>("https://dog.ceo/api/breeds/image/random").await,
-        3 => do_json::<CatAAS>("https://cataas.com/cat?json=true").await,
-        4 => {
+        3 => {
             let url = format!("https://api.thecatapi.com/v1/images/search?api_key={cat_api_token}");
             do_json::<TheCatAPI>(&url).await
         }
-        5 => {
+        4 => {
             let url = format!("https://api.thedogapi.com/v1/images/search?api_key={dog_api_token}");
             do_json::<TheCatAPI>(&url).await
         }

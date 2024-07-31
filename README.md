@@ -98,7 +98,8 @@ The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan) is also writte
 `config.hjson` uses a human-friendly JSON version, [HJson](https://hjson.github.io/).
 
 You can set up automatic reactions and replies based on keywords. All of them are case-insensitive.
-Auto-reactions also support regex and match on word boundaries, ignoring punctuation around them.
+Auto-reactions match only on word boundaries, ignoring punctuation around them.
+For example, `wobot` would match `WoBot!` but not `wo bot`.
 WoBot can react with both Unicode and custom Discord emojis, even animated ones.
 
 #### Example Config

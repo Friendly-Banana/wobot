@@ -1,11 +1,16 @@
+use itertools::Itertools;
+use once_cell::sync::Lazy;
 use poise::serenity_prelude::{
     CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, Mentionable,
 };
 use poise::FrameworkContext;
+use regex::Regex;
 use sqlx::query;
 
 use crate::commands::change_reaction_role;
 use crate::{Data, Error};
+
+static WORD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\w+\b").unwrap());
 
 pub(crate) async fn event_handler(
     ctx: &Context,
@@ -26,8 +31,12 @@ pub(crate) async fn event_handler(
             }
 
             let content = new_message.content.to_lowercase();
+            let words = WORD_REGEX
+                .find_iter(&content)
+                .map(|mat| mat.as_str().to_string())
+                .collect_vec();
             for (keyword, reaction) in &data.auto_reactions {
-                if keyword.is_match(&content) {
+                if words.contains(keyword) {
                     new_message.react(&ctx.http, reaction.clone()).await?;
                 }
             }
@@ -35,17 +44,17 @@ pub(crate) async fn event_handler(
             let matches = data
                 .auto_replies
                 .iter()
-                .filter(|r| r.keywords.iter().any(|s| s.is_match(&content)));
+                .filter(|r| r.keywords.iter().any(|s| content.contains(s)));
 
             for reply in matches {
-                let keyword = reply.keywords.first().unwrap().to_string();
+                let keyword = reply.keywords.first().unwrap();
                 query!("INSERT INTO auto_replies(user_id, keyword, count) VALUES ($1, $2, 1) ON CONFLICT (keyword, user_id) DO UPDATE SET count = auto_replies.count + 1", new_message.author.id.get() as i64, keyword).execute(&data.database).await?;
                 let stats = query!(
-                    "SELECT count(*) as count FROM auto_replies WHERE keyword = $1",
+                    "SELECT SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%'",
                     keyword
                 )
-                .fetch_one(&data.database)
-                .await?;
+                    .fetch_one(&data.database)
+                    .await?;
                 let amount_replied = stats.count.unwrap_or_default().to_string();
 
                 let user = reply.user.to_user(ctx.http()).await?;
