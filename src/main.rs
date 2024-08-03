@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::fs::read_to_string;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -10,7 +10,7 @@ use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
     ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
 };
-use poise::{Framework, PrefixFrameworkOptions};
+use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use shuttle_runtime::{CustomError, SecretStore};
 use shuttle_serenity::ShuttleSerenity;
@@ -39,9 +39,16 @@ struct AutoReply {
     colour: Colour,
 }
 
+#[derive(Debug, Deserialize)]
+struct LinkFix {
+    host: Option<String>,
+    tracking: Option<String>,
+}
+
 #[derive(Deserialize)]
 struct Config {
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
+    link_fixes: HashMap<String, LinkFix>,
     auto_reactions: HashMap<String, ReactionType>,
     auto_replies: Vec<AutoReply>,
 }
@@ -54,6 +61,7 @@ pub(crate) struct Data {
     mp_api_token: String,
     database: PgPool,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
+    link_fixes: HashMap<String, LinkFix>,
     auto_reactions: Vec<(String, ReactionType)>,
     auto_replies: Vec<AutoReply>,
     reaction_msgs: RwLock<HashSet<u64>>,
@@ -80,41 +88,18 @@ async fn poise(
         .await
         .context("Migrations failed")?;
 
-    let commands = vec![
-        activity(),
-        floof(),
-        boop(),
-        capy(),
-        clear(),
-        mp(),
-        cutie_pie(),
-        emoji(),
-        event(),
-        export_events(),
-        features(),
-        keyword_statistics(),
-        latency(),
-        mensa(),
-        modules(),
-        obama(),
-        ping(),
-        react(),
-        reaction_role(),
-        register_commands(),
-        reminder(),
-        say(),
-        servers(),
-        uwu(),
-        uwu_text(),
-    ];
     let framework = Framework::builder()
         .options(poise::FrameworkOptions {
-            commands,
+            commands: get_all_commands(),
             event_handler: |ctx, event, _framework, data| {
                 Box::pin(handler::event_handler(ctx, event, _framework, data))
             },
             prefix_options: PrefixFrameworkOptions {
-                prefix: Some("!".to_string()),
+                prefix: Some("w".to_string()),
+                edit_tracker: Some(Arc::from(EditTracker::for_timespan(Duration::from_secs(
+                    60,
+                )))),
+                execute_untracked_edits: true,
                 ..Default::default()
             },
             ..Default::default()
@@ -142,6 +127,7 @@ async fn poise(
                         .unwrap_or("".to_string()),
                     database: pool,
                     event_channel_per_guild: config.event_channel_per_guild,
+                    link_fixes: config.link_fixes,
                     auto_reactions: config.auto_reactions.into_iter().collect_vec(),
                     auto_replies: config.auto_replies,
                     reaction_msgs: RwLock::new(

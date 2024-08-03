@@ -3,9 +3,6 @@ use poise::builtins::register_in_guild;
 use poise::{ChoiceParameter, Command};
 use sqlx::{query, PgPool};
 
-use crate::commands::boop::boop;
-use crate::commands::keyword_statistics::keyword_statistics;
-use crate::commands::uwu::uwu;
 use crate::commands::*;
 use crate::{Context, Data, Error};
 
@@ -114,6 +111,17 @@ pub(crate) async fn get_active_modules(
     Ok(modules.iter().map(|m| Module::from(m.module_id)).collect())
 }
 
+pub(crate) fn get_all_commands() -> Vec<Command<Data, Error>> {
+    get_active_commands(vec![
+        Module::Canteen,
+        Module::Images,
+        Module::Owner,
+        Module::Utility,
+        Module::Events,
+        Module::Misc,
+    ])
+}
+
 pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Error>> {
     let mut commands = Vec::new();
     for module in modules {
@@ -121,7 +129,15 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
             Module::Canteen => vec![mensa(), mp()],
             Module::Images => vec![floof(), capy(), cutie_pie(), obama()],
             Module::Owner => vec![activity(), latency(), servers()],
-            Module::Utility => vec![clear(), emoji(), features(), reminder(), react(), say()],
+            Module::Utility => vec![
+                clear(),
+                emoji(),
+                features(),
+                embed(),
+                reminder(),
+                react(),
+                say(),
+            ],
             Module::Events => vec![event(), export_events(), reaction_role()],
             Module::Misc => vec![boop(), keyword_statistics(), uwu(), uwu_text(), ping()],
         });

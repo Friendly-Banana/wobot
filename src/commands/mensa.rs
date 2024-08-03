@@ -1,18 +1,19 @@
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
 
-use chrono::{Datelike, Duration, Local, Timelike, Weekday};
+use chrono::{DateTime, Datelike, Duration, Local, Timelike, Weekday};
+use chrono_tz::Tz;
 use itertools::Itertools;
 use percent_encoding::utf8_percent_encode;
 use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
 use serde::Deserialize;
+use tracing::info;
 
 use crate::commands::utils::random_color;
 use crate::constants::{HTTP_CLIENT, TIMEZONE};
 use crate::{Context, Error};
 
-/// https://tum-dev.github.io/eat-api/docs/
 const EAT_API_URL: &str = "https://tum-dev.github.io/eat-api";
 const GOOGLE_MAPS_SEARCH_URL: &str = "https://www.google.de/maps/place/";
 
@@ -45,21 +46,21 @@ struct LabelCount {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct Dish {
     name: String,
     dish_type: String,
     labels: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct DayMenu {
     date: String,
     dishes: Vec<Dish>,
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct WeekMenu {
     year: u32,
     days: Vec<DayMenu>,
@@ -119,14 +120,7 @@ async fn next(
     #[description = "default Mensa Garching"] canteen_name: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let (canteen, mut menu) = get_menu(canteen_name).await?;
-    let mut now = Local::now().with_timezone(&TIMEZONE);
-    if now.hour() >= 20 {
-        now = now.add(Duration::days(1));
-    }
-    while now.weekday() == Weekday::Sat || now.weekday() == Weekday::Sun {
-        now.add_assign(Duration::days(1));
-    }
+    let (canteen, mut menu, now) = get_menu(canteen_name).await?;
 
     let index = menu
         .days
@@ -149,14 +143,14 @@ async fn next(
     Ok(())
 }
 
-/// show this week's menu
+/// show this (or next) week's menu
 #[poise::command(slash_command, prefix_command)]
 async fn week(
     ctx: Context<'_>,
     #[description = "default Mensa Garching"] canteen_name: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let (canteen, menu) = get_menu(canteen_name).await?;
+    let (canteen, menu, _) = get_menu(canteen_name).await?;
 
     let labels = get_emojis_for_labels().await?;
     let mut reply = CreateReply::default();
@@ -212,7 +206,7 @@ fn link_location(canteen: &Canteen) -> String {
         GOOGLE_MAPS_SEARCH_URL,
         utf8_percent_encode(
             &canteen.location.address,
-            percent_encoding::NON_ALPHANUMERIC
+            percent_encoding::NON_ALPHANUMERIC,
         )
     )
 }
@@ -238,37 +232,49 @@ async fn get_canteens() -> reqwest::Result<Vec<Canteen>> {
         .await
 }
 
-async fn get_menu(canteen_name: Option<String>) -> Result<(Canteen, WeekMenu), Error> {
+async fn get_menu(
+    canteen_name: Option<String>,
+) -> Result<(Canteen, WeekMenu, DateTime<Tz>), Error> {
     let canteen_id = canteen_name
         .unwrap_or("Mensa Garching".to_string())
         .to_lowercase();
-    let mut canteens = get_canteens().await?;
-    let canteen = match canteens
-        .iter()
-        .position(|m| m.name.to_lowercase().contains(&canteen_id))
-    {
-        None => {
-            return Err(Error::from("Canteen not found"));
-        }
-        Some(c) => canteens.remove(c),
-    };
-    let now = Local::now().with_timezone(&TIMEZONE);
-    let week = now.iso_week().week();
+    let canteen = get_canteens()
+        .await?
+        .into_iter()
+        .find(|m| m.name.to_lowercase().contains(&canteen_id))
+        .ok_or("Canteen not found")?;
+
+    let day = next_week_day();
+    let week = day.iso_week().week();
 
     let menu_url = format!(
         "{}/{}/{}/{:02}.json",
         EAT_API_URL,
         canteen.canteen_id,
-        now.year(),
+        day.year(),
         week
     );
+    info!("Fetching menu from {}", menu_url);
 
     let response = HTTP_CLIENT.get(menu_url).send().await?;
     match response.error_for_status() {
         Ok(response) => {
             let menu = response.json::<WeekMenu>().await?;
-            Ok((canteen, menu))
+            info!("Fetched menu {:?}", menu);
+            Ok((canteen, menu, day))
         }
         Err(e) => Err(Error::from(format!("Menu fetching failed: {}", e))),
     }
+}
+
+fn next_week_day() -> DateTime<Tz> {
+    let mut now = Local::now().with_timezone(&TIMEZONE);
+    if now.hour() >= 20 {
+        now = now.add(Duration::days(1));
+    }
+    while now.weekday() == Weekday::Sat || now.weekday() == Weekday::Sun {
+        now.add_assign(Duration::days(1));
+    }
+    info!("Looking for menu for {}", now.format("%Y-%m-%d"));
+    now
 }
