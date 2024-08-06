@@ -20,7 +20,7 @@ use crate::commands::utils::{get_avatar_url, load_avatar};
 use crate::constants::{HTTP_CLIENT, ONE_DAY, ONE_HOUR};
 use crate::{Context, Error};
 
-const MENSA_PLAN_API: &str = "https://mensaplan.gigalixirapp.com/api";
+const MENSA_PLAN_API: &str = "http://localhost:4000/api";
 
 const MENSA_PLAN_PATH: &str = "assets/mensa_plan.png";
 static MENSA_PLAN_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
@@ -107,7 +107,10 @@ pub(crate) async fn add(
         let user = send_with_auth(
             ctx,
             HTTP_CLIENT
-                .post(format!("{}/user/", MENSA_PLAN_API))
+                .post(format!(
+                    "{}/users/auth/{}",
+                    MENSA_PLAN_API, new_user.auth_id
+                ))
                 .json(&json!({"user": new_user})),
         )
         .await?
@@ -131,7 +134,10 @@ pub(crate) async fn add(
             let group = send_with_auth(
                 ctx,
                 HTTP_CLIENT
-                    .post(format!("{}/group/", MENSA_PLAN_API))
+                    .post(format!(
+                        "{}/groups/server/{}",
+                        MENSA_PLAN_API, new_group.server_id
+                    ))
                     .json(&json!({"group": new_group})),
             )
             .await?
@@ -144,7 +150,7 @@ pub(crate) async fn add(
         send_with_auth(
             ctx,
             HTTP_CLIENT
-                .post(format!("{}/group/join", MENSA_PLAN_API))
+                .post(format!("{}/groups/join", MENSA_PLAN_API))
                 .json(&json!({
                     "group_id": group.id,
                     "user_id": user.id,
@@ -157,7 +163,7 @@ pub(crate) async fn add(
     send_with_auth(
         ctx,
         HTTP_CLIENT
-            .post(format!("{}/position", MENSA_PLAN_API))
+            .post(format!("{}/positions", MENSA_PLAN_API))
             .json(&json!({"position": {
                 "x": (letter as u8 - MIN_X as u8) as f32 * 100. / X_SCALE,
                 "y": (number - MIN_Y) as f32 * 100. / Y_SCALE,
@@ -177,7 +183,7 @@ pub(crate) async fn delete(ctx: Context<'_>) -> Result<(), Error> {
     send_with_auth(
         ctx,
         HTTP_CLIENT.delete(format!(
-            "{}/user/oauth2|discord|{}/position",
+            "{}/positions/user/oauth2|discord|{}",
             MENSA_PLAN_API,
             ctx.author().id
         )),
@@ -208,7 +214,7 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
     let positions = send_with_auth(
         ctx,
         HTTP_CLIENT.get(format!(
-            "{}/group/{}/positions",
+            "{}/positions/server/{}",
             MENSA_PLAN_API,
             ctx.guild_id().unwrap().get()
         )),

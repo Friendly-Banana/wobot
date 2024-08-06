@@ -1,11 +1,12 @@
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use anyhow::Context as _;
-use poise::serenity_prelude;
 use poise::serenity_prelude::{
     CacheHttp, EmojiId, GuildId, Mentionable, Message, Reaction, ReactionCollector, ReactionType,
-    RoleId,
+    RoleId, MESSAGE_CODE_LIMIT,
 };
+use poise::{serenity_prelude, CreateReply};
 use sqlx::{query, query_as};
 use tracing::{debug, error, info, warn};
 
@@ -172,7 +173,8 @@ async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<()
 
 #[poise::command(slash_command, prefix_command, guild_only)]
 pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
-    let reaction_roles = if ctx.framework().options.owners.contains(&ctx.author().id) {
+    let show_all_roles = ctx.framework().options.owners.contains(&ctx.author().id);
+    let reaction_roles = if show_all_roles {
         ctx.defer_ephemeral().await?;
         query_as!(ReactionRole, "SELECT * FROM reaction_roles")
             .fetch_all(&ctx.data().database)
@@ -188,10 +190,10 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         .fetch_all(&ctx.data().database)
         .await?
     };
-    let mut roles = Vec::from(["**Message | Emoji | Role**".to_string()]);
+    let mut roles = VecDeque::from(["**Message | Emoji | Role**".to_string()]);
     for reaction_role in reaction_roles {
-        let emoji = get_emoji_from_id(ctx, reaction_role.emoji_id).await?;
-        roles.push(format!(
+        let emoji = get_emoji_from_id(ctx, reaction_role.guild_id, reaction_role.emoji_id).await?;
+        roles.push_back(format!(
             "{} {} {}",
             link_message(
                 Some(GuildId::new(reaction_role.guild_id as u64)),
@@ -202,7 +204,26 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
             RoleId::new(reaction_role.role_id as u64).mention()
         ));
     }
-    ctx.say(roles.join("\n")).await?;
+    // split message into in chunks
+    let mut s = roles.pop_front().unwrap();
+    loop {
+        match roles.pop_front() {
+            Some(line) => {
+                // we'll add a newline
+                if line.len() + s.len() + 1 > MESSAGE_CODE_LIMIT {
+                    ctx.reply(s).await?;
+                    s = String::new();
+                }
+                s.push('\n');
+                s.push_str(&line);
+            }
+            None => {
+                ctx.send(CreateReply::default().content(s).ephemeral(show_all_roles))
+                    .await?;
+                break;
+            }
+        }
+    }
     Ok(())
 }
 
@@ -228,7 +249,11 @@ async fn get_emoji_id(reaction: ReactionType, data: &Data) -> Result<i64, Error>
         _ => unimplemented!(),
     }
 }
-async fn get_emoji_from_id(ctx: Context<'_>, emoji_id: i64) -> Result<ReactionType, Error> {
+async fn get_emoji_from_id(
+    ctx: Context<'_>,
+    guild_id: i64,
+    emoji_id: i64,
+) -> Result<String, Error> {
     if emoji_id >> 32 == 0 {
         let emoji = query!(
             "SELECT unicode FROM unicode_to_emoji WHERE id = $1",
@@ -237,15 +262,13 @@ async fn get_emoji_from_id(ctx: Context<'_>, emoji_id: i64) -> Result<ReactionTy
         .fetch_one(&ctx.data().database)
         .await
         .context("Emoji should have gotten an id")?;
-        return Ok(ReactionType::Unicode(emoji.unicode));
+        return Ok(emoji.unicode);
     }
-    Ok(ReactionType::from(
-        ctx.guild_id()
-            .expect("guild_only")
-            .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
-            .await
-            .context("Emoji should exist")?,
-    ))
+    Ok(GuildId::new(guild_id as u64)
+        .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
+        .await
+        .map(|e| e.to_string())
+        .unwrap_or(emoji_id.to_string()))
 }
 
 pub(crate) async fn change_reaction_role(
