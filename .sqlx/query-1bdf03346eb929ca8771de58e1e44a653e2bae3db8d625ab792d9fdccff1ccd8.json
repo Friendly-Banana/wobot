@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= $2",
+  "query": "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= interval '1 day' * $2",
   "describe": {
     "columns": [
       {
@@ -12,12 +12,12 @@
     "parameters": {
       "Left": [
         "Int8",
-        "Interval"
+        "Float8"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "e8f9985394b688262d05a8beb30e49823265659c1ef8f96c70b855473e730e76"
+  "hash": "1bdf03346eb929ca8771de58e1e44a653e2bae3db8d625ab792d9fdccff1ccd8"
 }

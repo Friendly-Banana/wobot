@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use poise::futures_util::StreamExt;
 use poise::serenity_prelude::{Context, CreateMessage, GuildId};
-use sqlx::{query, PgPool};
+use sqlx::{PgPool, query};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
@@ -36,17 +36,17 @@ async fn access(
     debug!("Checking {} guilds...", config.len());
 
     for (guild, access) in config {
-        if access.descending_roles.len() > 1 {
+        if access.descending_roles.len() < 2 {
             warn!("Need at least 2 roles to change access");
             continue;
         }
         let users = query!(
-            "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= $2",
+            "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= interval '1 day' * $2",
             guild.get() as i64,
             access.active_days as i32
         )
-        .fetch_all(database)
-        .await?;
+            .fetch_all(database)
+            .await?;
         let active_users = users
             .into_iter()
             .map(|row| row.user_id as u64)
@@ -74,6 +74,9 @@ async fn access(
                                 member.user.name,
                                 access.descending_roles[i + 1]
                             );
+                            query!("INSERT INTO activity (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id, guild_id) DO UPDATE SET last_active = now()", member.user.id.get() as i64, guild.get() as i64)
+                                .execute(database)
+                                .await?;
                             member.add_role(ctx, access.descending_roles[i + 1]).await?;
                             member.remove_role(ctx, role).await?;
                             count += 1;
@@ -81,7 +84,10 @@ async fn access(
                         }
                     }
                 }
-                Err(error) => warn!("Member checking failed: {}", error),
+                Err(error) => {
+                    warn!("Member checking failed: {}", error);
+                    break;
+                }
             }
         }
         if count != 0 {

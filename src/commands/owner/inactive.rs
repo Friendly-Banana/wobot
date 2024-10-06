@@ -1,51 +1,47 @@
 use std::collections::HashSet;
 
-use chrono::Utc;
 use itertools::Itertools;
 use poise::futures_util::StreamExt;
-use tracing::{error, warn};
+use poise::serenity_prelude::Mentionable;
+use sqlx::query;
+use tracing::warn;
 
-use crate::constants::ONE_DAY;
 use crate::{Context, Error};
 
-/// List inactive users
-#[poise::command(slash_command, prefix_command, owners_only)]
+/// List inactive users, default 60 days
+#[poise::command(slash_command, prefix_command, guild_only, owners_only)]
 pub(crate) async fn inactive(ctx: Context<'_>, days: Option<u32>) -> Result<(), Error> {
-    ctx.defer().await?;
-    let cutoff = (Utc::now() - ONE_DAY * days.unwrap_or(30)).timestamp();
-    let mut active = HashSet::new();
-    let channels = ctx.guild_id().unwrap().channels(ctx).await?;
-    for (channel_id, c) in channels {
-        println!("Channel {}", c.name);
-        let mut messages = channel_id.messages_iter(&ctx).boxed();
-        while let Some(message_result) = messages.next().await {
-            match message_result {
-                Ok(message) => {
-                    active.insert(message.author);
-                    if message.timestamp.unix_timestamp() < cutoff {
-                        break;
-                    }
-                }
-                Err(error) => {
-                    warn!("Uh oh! Error: {}", error);
-                    break;
-                }
-            }
-        }
-    }
-    println!("Active user: {}", active.iter().map(|u| &u.name).join(", "));
+    ctx.defer_ephemeral().await?;
+    let guild = ctx.guild_id().unwrap();
+    let active = query!(
+            "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= interval '1 day' * $2",
+            guild.get() as i64,
+            days.unwrap_or(60) as i32
+        )
+        .fetch_all(&ctx.data().database)
+        .await?
+        .into_iter()
+        .map(|row| row.user_id as u64)
+        .collect::<HashSet<_>>();
+
     let mut inactive = Vec::new();
-    let mut members = ctx.guild_id().unwrap().members_iter(&ctx).boxed();
+
+    let mut members = guild.members_iter(&ctx).boxed();
     while let Some(member_result) = members.next().await {
         match member_result {
             Ok(member) => {
-                if !active.contains(&member.user) {
-                    inactive.push(member.user)
+                if !active.contains(&member.user.id.get()) {
+                    inactive.push(member.user.id);
                 }
             }
-            Err(error) => error!("Error: {}", error),
+            Err(error) => warn!("Member checking failed: {}", error),
         }
     }
-    println!("Inactive: {}", inactive.iter().map(|u| &u.name).join(", "));
+
+    ctx.reply(format!(
+        "Inactive: {}",
+        inactive.into_iter().map(|u| u.mention()).join(", ")
+    ))
+    .await?;
     Ok(())
 }
