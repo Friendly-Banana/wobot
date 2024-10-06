@@ -49,8 +49,10 @@ pub(crate) async fn boop(ctx: Context<'_>) -> Result<(), Error> {
         mci.create_response(ctx, CreateInteractionResponse::Acknowledge)
             .await?;
     }
-
-    let message = CreateReply::default().content(format!("Total boops: {}", boop_count));
+    // clear button
+    let message = CreateReply::default()
+        .content(format!("Total boops: {}", boop_count))
+        .components(vec![]);
     reply_handle.edit(ctx, message).await?;
 
     Ok(())

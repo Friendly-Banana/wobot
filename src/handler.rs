@@ -1,14 +1,16 @@
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use poise::serenity_prelude::{
-    CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, Mentionable,
+    CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, GuildId,
+    Mentionable, UserId,
 };
 use poise::FrameworkContext;
 use regex::Regex;
 use sqlx::query;
+use tracing::warn;
 
 use crate::commands::change_reaction_role;
-use crate::{Data, Error};
+use crate::{CacheEntry, Data, Error};
 
 static WORD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\w+\b").unwrap());
 
@@ -19,7 +21,18 @@ pub(crate) async fn event_handler(
     data: &Data,
 ) -> Result<(), Error> {
     match event {
+        FullEvent::VoiceStateUpdate { new, .. } => {
+            if let Some(guild) = new.guild_id {
+                update_activity(data, guild, new.user_id).await;
+            }
+            Ok(())
+        }
         FullEvent::ReactionAdd { add_reaction } => {
+            if let Some(guild) = add_reaction.guild_id {
+                if let Some(user) = add_reaction.user_id {
+                    update_activity(data, guild, user).await;
+                }
+            }
             change_reaction_role(ctx, data, add_reaction, true).await
         }
         FullEvent::ReactionRemove { removed_reaction } => {
@@ -28,6 +41,9 @@ pub(crate) async fn event_handler(
         FullEvent::Message { new_message } => {
             if new_message.author.bot {
                 return Ok(());
+            }
+            if let Some(guild) = new_message.guild_id {
+                update_activity(data, guild, new_message.author.id).await;
             }
 
             let content = new_message.content.to_lowercase();
@@ -86,5 +102,20 @@ pub(crate) async fn event_handler(
             Ok(())
         }
         _ => Ok(()),
+    }
+}
+
+async fn update_activity(data: &Data, guild: GuildId, user: UserId) {
+    if let Some(guild_activity) = data.activity_per_guild.get(&guild) {
+        if guild_activity.get(&user).is_none() {
+            let result = query!("INSERT INTO activity (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id, guild_id) DO UPDATE SET last_active = now()", user.get() as i64, guild.get() as i64)
+                .execute(&data.database)
+                .await;
+            if let Err(e) = result {
+                warn!("Failed to update activity for {}: {}", user.get(), e);
+            } else {
+                guild_activity.insert(user, CacheEntry {});
+            }
+        }
     }
 }

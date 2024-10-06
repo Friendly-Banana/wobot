@@ -20,7 +20,7 @@ use crate::commands::utils::{get_avatar_url, load_avatar};
 use crate::constants::{HTTP_CLIENT, ONE_DAY, ONE_HOUR};
 use crate::{Context, Error};
 
-const MENSA_PLAN_API: &str = "http://localhost:4000/api";
+const MENSA_PLAN_API: &str = "https://mensaplan.gigalixirapp.com/api";
 
 const MENSA_PLAN_PATH: &str = "assets/mensa_plan.png";
 static MENSA_PLAN_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
@@ -64,7 +64,7 @@ struct MPPosition {
     y: f32,
 }
 
-static API_USER_CACHE: Lazy<Cache<UserId, MPUser>> = Lazy::new(|| Cache::new(500));
+static API_USER_CACHE: Lazy<Cache<UserId, MPUser>> = Lazy::new(|| Cache::new(100));
 static API_GROUP_CACHE: Lazy<Cache<GuildId, MPGroup>> = Lazy::new(|| Cache::new(10));
 
 async fn send_with_auth(ctx: Context<'_>, rb: RequestBuilder) -> Result<Response, reqwest::Error> {

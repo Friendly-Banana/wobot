@@ -171,25 +171,8 @@ fn create_menu_embed(
     day: DayMenu,
     emojis_for_labels: &HashMap<String, String>,
 ) -> CreateReply {
-    let (mut side_dishes, mut dishes): (Vec<Dish>, Vec<Dish>) = day
-        .dishes
-        .into_iter()
-        .partition(|d| d.dish_type.eq_ignore_ascii_case("Beilagen"));
-
-    side_dishes.retain(|d| !d.name.contains("Täglich frisch"));
-
-    dishes.push(Dish {
-        name: side_dishes.iter().map(|d| &d.name).join(", "),
-        dish_type: "Beilagen".to_string(),
-        labels: side_dishes
-            .into_iter()
-            .flat_map(|d| d.labels)
-            .unique()
-            .collect(),
-    });
-
     let mut embed = CreateEmbed::default();
-    for dish in dishes {
+    for dish in day.dishes {
         let emojis = dish
             .labels
             .iter()

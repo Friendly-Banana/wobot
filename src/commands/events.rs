@@ -2,13 +2,13 @@ use std::borrow::Cow;
 use std::ops::Add;
 
 use anyhow::Context as _;
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
-use chrono_tz::Tz;
+use chrono::{DateTime, Duration, NaiveTime, Utc};
+use dateparser::parse_with;
 use ics::properties::{Description, DtEnd, DtStart, Location, Summary};
 use ics::{Event, ICalendar};
 use image::EncodableLayout;
 use poise::serenity_prelude::{
-    CreateAttachment, CreateScheduledEvent, CreateThread, ReactionType, ScheduledEventType,
+    CreateAttachment, CreateScheduledEvent, CreateThread, ScheduledEventType,
 };
 
 use crate::constants::TIMEZONE;
@@ -78,8 +78,8 @@ pub(crate) async fn event(
     ctx: Context<'_>,
     name: String,
     location: String,
-    #[description = "yyyy-mm-dd hh:mm, example: 2012-12-21 12:34"] start: String,
-    #[description = "yyyy-mm-dd hh:mm, default start_time + 1h"] end: Option<String>,
+    start: String,
+    #[description = "default start + 1 hour"] end: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let (start_date, end_date) = parse_start_and_end_date(start, end)?;
@@ -100,58 +100,56 @@ pub(crate) async fn event(
         event.id,
         ctx.author()
     );
-    let announcement_channel = ctx
-        .data()
-        .event_channel_per_guild
-        .get(&guild_id)
-        .with_context(|| format!("No announcement channel configured for guild {guild_id}"))?;
-
-    let msg = announcement_channel.say(ctx.http(), announcement).await?;
-    msg.react(ctx.http(), ReactionType::from('👍')).await?;
-    msg.react(ctx.http(), ReactionType::from('❔')).await?;
-
-    let thread = announcement_channel
-        .create_thread_from_message(ctx.http(), msg.id, CreateThread::new(name))
-        .await?;
-    thread.id.add_thread_member(ctx, ctx.author().id).await?;
-    done!(ctx);
+    let announcement_channel = ctx.data().event_channel_per_guild.get(&guild_id);
+    match announcement_channel {
+        None => {
+            ctx.reply("Event has been created. To also send an announcement and create a thread, configure a channel for this server").await?;
+            Ok(())
+        }
+        Some(channel) => {
+            let msg = channel.say(ctx.http(), announcement).await?;
+            let thread = channel
+                .create_thread_from_message(ctx.http(), msg.id, CreateThread::new(name))
+                .await?;
+            thread.id.add_thread_member(ctx, ctx.author().id).await?;
+            done!(ctx);
+        }
+    }
 }
 
 fn parse_start_and_end_date(
     start: String,
     end: Option<String>,
-) -> Result<(DateTime<Tz>, DateTime<Tz>), Error> {
-    const TIME_FORMAT: &str = "%Y-%m-%d %H:%M";
-
-    let start_date = NaiveDateTime::parse_from_str(&start, TIME_FORMAT)
-        .map(|date| date.and_local_timezone(TIMEZONE).unwrap())
-        .context("Couldn't parse start time")?;
+) -> Result<(DateTime<Utc>, DateTime<Utc>), Error> {
+    let time = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
+    let start_date = parse_with(&start, &TIMEZONE, time).context("Couldn't parse start time")?;
     let end_date = match end {
         None => start_date.add(Duration::hours(1)),
-        Some(input) => NaiveDateTime::parse_from_str(&input, TIME_FORMAT)
-            .map(|date| date.and_local_timezone(TIMEZONE).unwrap())
-            .context("Couldn't parse end time")?,
+        Some(input) => parse_with(&input, &TIMEZONE, time).context("Couldn't parse end time")?,
     };
     Ok((start_date, end_date))
 }
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Add;
+
+    use crate::constants::ONE_HOUR;
+
     use super::parse_start_and_end_date;
 
     #[test]
     fn test_parse_dates() {
         let (start, end) = parse_start_and_end_date("1970-01-01 00:00".to_string(), None).unwrap();
-        assert_eq!(start.to_rfc3339(), "1970-01-01T00:00:00+01:00");
-        assert_eq!(end.to_rfc3339(), "1970-01-01T01:00:00+01:00");
+        assert_eq!(start.add(ONE_HOUR), end);
 
         let (start, end) = parse_start_and_end_date(
             "2012-12-31 12:34".to_string(),
             Some("2013-01-01 21:43".to_string()),
         )
         .unwrap();
-        assert_eq!(start.to_rfc3339(), "2012-12-31T12:34:00+01:00");
-        assert_eq!(end.to_rfc3339(), "2013-01-01T21:43:00+01:00");
+        assert_eq!(start.timestamp(), 1356953640);
+        assert_eq!(end.timestamp(), 1357072980);
     }
 
     #[test]

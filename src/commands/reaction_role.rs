@@ -1,17 +1,15 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
+use crate::{done, Context, Data, Error};
 use anyhow::Context as _;
 use poise::serenity_prelude::{
-    CacheHttp, EmojiId, GuildId, Mentionable, Message, Reaction, ReactionCollector, ReactionType,
-    RoleId, MESSAGE_CODE_LIMIT,
+    CacheHttp, ChannelId, EmojiId, GuildId, Mentionable, Message, MessageId, Reaction,
+    ReactionCollector, ReactionType, RoleId, MESSAGE_CODE_LIMIT,
 };
 use poise::{serenity_prelude, CreateReply};
 use sqlx::{query, query_as};
 use tracing::{debug, error, info, warn};
-
-use crate::commands::link_message;
-use crate::{done, Context, Data, Error};
 
 const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -193,13 +191,12 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
     let mut roles = VecDeque::from(["**Message | Emoji | Role**".to_string()]);
     for reaction_role in reaction_roles {
         let emoji = get_emoji_from_id(ctx, reaction_role.guild_id, reaction_role.emoji_id).await?;
+        let guild = Some(GuildId::new(reaction_role.guild_id as u64));
+        let channel_id = reaction_role.channel_id as u64;
+        let msg_id = reaction_role.message_id as u64;
         roles.push_back(format!(
             "{} {} {}",
-            link_message(
-                Some(GuildId::new(reaction_role.guild_id as u64)),
-                reaction_role.channel_id,
-                reaction_role.message_id,
-            ),
+            MessageId::new(msg_id).link(ChannelId::new(channel_id), guild),
             emoji,
             RoleId::new(reaction_role.role_id as u64).mention()
         ));

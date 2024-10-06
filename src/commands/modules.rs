@@ -128,7 +128,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
         commands.extend(match module {
             Module::Canteen => vec![mensa(), mp()],
             Module::Images => vec![floof(), capy(), cutie_pie(), obama()],
-            Module::Owner => vec![activity(), latency(), servers()],
+            Module::Owner => vec![activity(), inactive(), latency(), servers()],
             Module::Utility => vec![
                 clear(),
                 emoji(),

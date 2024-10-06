@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id FROM activity WHERE guild_id = $1 AND now() - last_active <= $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Interval"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e8f9985394b688262d05a8beb30e49823265659c1ef8f96c70b855473e730e76"
+}

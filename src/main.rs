@@ -6,9 +6,10 @@ use std::time::Duration;
 
 use anyhow::Context as _;
 use itertools::Itertools;
+use mini_moka::sync::{Cache, CacheBuilder};
 use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
-    ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
+    ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, RoleId, UserId,
 };
 use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
@@ -17,9 +18,12 @@ use shuttle_serenity::ShuttleSerenity;
 use sqlx::{query, PgPool};
 use tracing::info;
 
+use crate::check_access::check_access;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
+use crate::constants::ONE_DAY;
 
+mod check_access;
 mod check_reminder;
 mod commands;
 mod constants;
@@ -45,13 +49,23 @@ struct LinkFix {
     tracking: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct Access {
+    log_channel: ChannelId,
+    active_days: u32,
+    descending_roles: Vec<RoleId>,
+}
 #[derive(Deserialize)]
 struct Config {
+    access_per_guild: HashMap<GuildId, Access>,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
     link_fixes: HashMap<String, LinkFix>,
     auto_reactions: HashMap<String, ReactionType>,
     auto_replies: Vec<AutoReply>,
 }
+
+#[derive(Debug, Clone)]
+struct CacheEntry {}
 
 /// User data, which is stored and accessible in all command invocations
 #[derive(Debug)]
@@ -60,6 +74,7 @@ pub(crate) struct Data {
     dog_api_token: String,
     mp_api_token: String,
     database: PgPool,
+    activity_per_guild: HashMap<GuildId, Cache<UserId, CacheEntry>>,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
     link_fixes: HashMap<String, LinkFix>,
     auto_reactions: Vec<(String, ReactionType)>,
@@ -82,6 +97,12 @@ async fn poise(
 
     let config_data = read_to_string("assets/config.hjson").context("Couldn't load config file")?;
     let config: Config = deser_hjson::from_str(&config_data).context("Bad config")?;
+    let activity = config
+        .access_per_guild
+        .keys()
+        .copied()
+        .map(|guild| (guild, CacheBuilder::new(500).time_to_live(ONE_DAY).build()))
+        .collect();
 
     sqlx::migrate!()
         .run(&pool)
@@ -117,8 +138,10 @@ async fn poise(
                     .fetch_all(&pool)
                     .await?;
                 info!("Loaded reaction messages");
-                check_reminders(ctx.clone(), pool.clone(), Duration::from_secs(60));
+                check_reminders(ctx.clone(), Duration::from_secs(60), pool.clone());
                 info!("Started reminder thread");
+                check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
+                info!("Started access thread");
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
@@ -126,6 +149,7 @@ async fn poise(
                         .get("MENSAPLAN_API_TOKEN")
                         .unwrap_or("".to_string()),
                     database: pool,
+                    activity_per_guild: activity,
                     event_channel_per_guild: config.event_channel_per_guild,
                     link_fixes: config.link_fixes,
                     auto_reactions: config.auto_reactions.into_iter().collect_vec(),
@@ -142,9 +166,8 @@ async fn poise(
         discord_token,
         GatewayIntents::GUILD_MESSAGES
             | GatewayIntents::MESSAGE_CONTENT
-            | GatewayIntents::GUILD_EMOJIS_AND_STICKERS
             | GatewayIntents::GUILD_MESSAGE_REACTIONS
-            | GatewayIntents::GUILD_SCHEDULED_EVENTS,
+            | GatewayIntents::GUILD_VOICE_STATES,
     )
     .framework(framework)
     .await
