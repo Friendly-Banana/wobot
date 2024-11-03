@@ -1,7 +1,7 @@
+use std::sync::LazyLock;
 use std::time::Duration;
 
 use base64::Engine;
-use once_cell::sync::Lazy;
 use poise::serenity_prelude::{
     Attachment, ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton,
     CreateEmbed, EmojiIdentifier, Message, ReactionType,
@@ -17,11 +17,11 @@ use crate::{done, Context, Error};
 const ADD_EMOJIS_TIMEOUT: Duration = Duration::from_secs(30);
 const EMOJI_URL: &str = "https://cdn.discordapp.com/emojis/";
 const EMOJI_FORMAT: &str = "png";
-static EMOJI_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new("<:([a-zA-Z0-9_]+):([0-9]+)>").expect("EMOJI_REGEX"));
+static EMOJI_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("<:([a-zA-Z0-9_]+):([0-9]+)>").expect("EMOJI_REGEX"));
 const ANIMATED_EMOJI_FORMAT: &str = "gif";
-static ANIMATED_EMOJI_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new("<a:([a-zA-Z0-9_]+):([0-9]+)>").expect("ANIMATED_EMOJI_REGEX"));
+static ANIMATED_EMOJI_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new("<a:([a-zA-Z0-9_]+):([0-9]+)>").expect("ANIMATED_EMOJI_REGEX"));
 
 struct NewEmoji {
     name: String,

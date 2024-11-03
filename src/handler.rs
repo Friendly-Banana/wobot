@@ -1,5 +1,4 @@
 use itertools::Itertools;
-use once_cell::sync::Lazy;
 use poise::serenity_prelude::{
     CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, GuildId,
     Mentionable, UserId,
@@ -7,12 +6,13 @@ use poise::serenity_prelude::{
 use poise::FrameworkContext;
 use regex::Regex;
 use sqlx::query;
+use std::sync::LazyLock;
 use tracing::warn;
 
 use crate::commands::change_reaction_role;
 use crate::{CacheEntry, Data, Error};
 
-static WORD_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\w+\b").unwrap());
+static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\w+\b").unwrap());
 
 pub(crate) async fn event_handler(
     ctx: &Context,

@@ -1,12 +1,11 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 
 use anyhow::{anyhow, Context as _};
 use image::{DynamicImage, GenericImage};
 use itertools::Itertools;
 use mini_moka::sync::Cache;
-use once_cell::sync::Lazy;
 use poise::futures_util::future::try_join_all;
 use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::{GuildId, UserId};
@@ -64,8 +63,8 @@ struct MPPosition {
     y: f32,
 }
 
-static API_USER_CACHE: Lazy<Cache<UserId, MPUser>> = Lazy::new(|| Cache::new(100));
-static API_GROUP_CACHE: Lazy<Cache<GuildId, MPGroup>> = Lazy::new(|| Cache::new(10));
+static API_USER_CACHE: LazyLock<Cache<UserId, MPUser>> = LazyLock::new(|| Cache::new(100));
+static API_GROUP_CACHE: LazyLock<Cache<GuildId, MPGroup>> = LazyLock::new(|| Cache::new(10));
 
 async fn send_with_auth(ctx: Context<'_>, rb: RequestBuilder) -> Result<Response, reqwest::Error> {
     rb.bearer_auth(&ctx.data().mp_api_token).send().await

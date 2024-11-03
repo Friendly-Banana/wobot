@@ -2,11 +2,11 @@ use anyhow::Context as _;
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
 use mini_moka::sync::Cache;
-use once_cell::sync::Lazy;
 use poise::serenity_prelude::{Colour, CreateAttachment, CreateEmbed, User};
 use poise::{CreateReply, ReplyHandle};
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
+use std::sync::LazyLock;
 
 use crate::constants::{HTTP_CLIENT, ONE_DAY};
 use crate::{Context, Error};
@@ -37,7 +37,7 @@ pub(crate) fn random_color() -> Colour {
     *COLORS.choose(&mut thread_rng()).unwrap()
 }
 
-static AVATAR_CACHE: Lazy<Cache<String, DynamicImage>> = Lazy::new(|| {
+static AVATAR_CACHE: LazyLock<Cache<String, DynamicImage>> = LazyLock::new(|| {
     Cache::builder()
         .max_capacity(50 * 1024 * 1024) // 50 MB
         .time_to_idle(10 * ONE_DAY)

@@ -1,17 +1,16 @@
-use std::sync::OnceLock;
-
+use ab_glyph::Font;
 use anyhow::Context as _;
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
 use imageproc::drawing::draw_text_mut;
 use poise::serenity_prelude::{CreateAttachment, CreateMessage, GetMessages, Message};
-use rusttype::Scale;
+use std::sync::OnceLock;
 use tracing::{debug, info};
 
 use crate::constants::{FONT, WHITE};
 use crate::{done, Context, Error};
 
-const SCALE: Scale = Scale { x: 50f32, y: 50f32 };
+const FONT_SIZE: f32 = 50.0;
 const OBAMA_PATH: &str = "assets/obama_medal.jpg";
 static OBAMA_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
 
@@ -41,8 +40,9 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
             });
 
             let mut img = OBAMA_IMAGE.get().context("OBAMA_IMAGE loaded")?.clone();
-            draw_text_mut(&mut img, WHITE, 150, 160, SCALE, &FONT, text); // gets medal
-            draw_text_mut(&mut img, WHITE, 540, 20, SCALE, &FONT, text); // puts medal
+            let scale = FONT.pt_to_px_scale(FONT_SIZE).unwrap();
+            draw_text_mut(&mut img, WHITE, 150, 160, scale, &*FONT, text); // gets medal
+            draw_text_mut(&mut img, WHITE, 540, 20, scale, &*FONT, text); // puts medal
 
             let mut output_bytes: Vec<u8> = Vec::new();
             img.write_with_encoder(PngEncoder::new(&mut output_bytes))?;
