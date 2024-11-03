@@ -436,6 +436,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "command_attr"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88da8d7e9fe6f30d8e3fcf72d0f84102b49de70fece952633e8439e89bdc7631"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1595,6 +1606,12 @@ name = "lebe"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "03087c2bad5e1034e8cace5926dec053fb3790248370865f5117a7d0213354c8"
+
+[[package]]
+name = "levenshtein"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db13adb97ab515a3691f56e4dbab09283d0b86cb45abd991d8634a9d6f501760"
 
 [[package]]
 name = "libc"
@@ -2983,15 +3000,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_cow"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e7bbbec7196bfde255ab54b65e34087c0849629280028238e67ee25d6a4b7da"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "serde_derive"
 version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3028,28 +3036,30 @@ dependencies = [
 
 [[package]]
 name = "serenity"
-version = "0.12.2"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "880a04106592d0a8f5bdacb1d935889bfbccb4a14f7074984d9cd857235d34ac"
+checksum = "c64da29158bb55d70677cacd4f4f8eab1acef005fb830d9c3bea411b090e96a9"
 dependencies = [
  "arrayvec",
  "async-trait",
- "base64 0.22.1",
+ "base64 0.21.7",
  "bitflags 2.6.0",
  "bytes",
  "chrono",
+ "command_attr",
  "dashmap",
  "flate2",
  "futures",
  "fxhash",
+ "levenshtein",
  "mime_guess",
  "parking_lot 0.12.3",
  "percent-encoding",
  "reqwest 0.11.27",
  "secrecy",
  "serde",
- "serde_cow",
  "serde_json",
+ "static_assertions",
  "time",
  "tokio",
  "tokio-tungstenite",
@@ -3057,6 +3067,7 @@ dependencies = [
  "typemap_rev",
  "typesize",
  "url",
+ "uwl",
 ]
 
 [[package]]
@@ -3542,6 +3553,12 @@ dependencies = [
  "url",
  "urlencoding",
 ]
+
+[[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stitchy-core"
@@ -4271,6 +4288,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "uwl"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4bf03e0ca70d626ecc4ba6b0763b934b6f2976e8c744088bb3c1d646fbb1ad0"
+
+[[package]]
 name = "uwuify"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4707,6 +4730,7 @@ dependencies = [
  "reqwest 0.12.5",
  "rusttype",
  "serde",
+ "serenity",
  "shuttle-runtime",
  "shuttle-serenity",
  "shuttle-shared-db",

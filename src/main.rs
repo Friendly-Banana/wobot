@@ -140,8 +140,8 @@ async fn poise(
                 info!("Loaded reaction messages");
                 check_reminders(ctx.clone(), Duration::from_secs(60), pool.clone());
                 info!("Started reminder thread");
-                check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
-                info!("Started access thread");
+                //check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
+                //info!("Started access thread");
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),

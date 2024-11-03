@@ -34,3 +34,5 @@ dateparser = { version = "0.2.1", git = "https://github.com/RiediJohannes/datepa
 percent-encoding = "2.3.1"
 rand = "0.8.5"
 mini-moka = "0.10.3"
+# waiting for new release of https://github.com/serenity-rs/serenity/pull/2893
+serenity = { version = "=0.12.1" }

@@ -112,14 +112,17 @@ pub(crate) async fn get_active_modules(
 }
 
 pub(crate) fn get_all_commands() -> Vec<Command<Data, Error>> {
-    get_active_commands(vec![
+    let mut cmds = get_active_commands(vec![
         Module::Canteen,
         Module::Images,
         Module::Owner,
         Module::Utility,
         Module::Events,
         Module::Misc,
-    ])
+    ]);
+    cmds.push(modules());
+    cmds.push(register_commands());
+    cmds
 }
 
 pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Error>> {

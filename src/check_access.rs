@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use poise::futures_util::StreamExt;
 use poise::serenity_prelude::{Context, CreateMessage, GuildId};
-use sqlx::{PgPool, query};
+use sqlx::{query, PgPool};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
