@@ -7,6 +7,7 @@ use itertools::Itertools;
 use percent_encoding::utf8_percent_encode;
 use poise::serenity_prelude::CreateEmbed;
 use poise::CreateReply;
+use reqwest::StatusCode;
 use serde::Deserialize;
 use tracing::info;
 
@@ -246,7 +247,13 @@ async fn get_menu(
             info!("Fetched menu {:?}", menu);
             Ok((canteen, menu, day))
         }
-        Err(e) => Err(Error::from(format!("Menu fetching failed: {}", e))),
+        Err(e) => {
+            if e.status() == Some(StatusCode::NOT_FOUND) {
+                return Err(Error::from("No menu found, maybe the mensa is closed?"));
+            }
+
+            Err(Error::from(format!("Menu fetching failed: {}", e)))
+        }
     }
 }
 
