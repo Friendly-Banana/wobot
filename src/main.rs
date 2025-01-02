@@ -18,7 +18,6 @@ use shuttle_serenity::ShuttleSerenity;
 use sqlx::{query, PgPool};
 use tracing::info;
 
-use crate::check_access::check_access;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
 use crate::constants::ONE_DAY;
@@ -49,6 +48,7 @@ struct LinkFix {
     tracking: Option<String>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct Access {
     log_channel: ChannelId,
