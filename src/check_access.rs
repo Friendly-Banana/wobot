@@ -9,6 +9,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{Access, Error};
 
+#[allow(dead_code)]
 pub(crate) fn check_access(
     ctx: Context,
     period: Duration,
@@ -28,6 +29,7 @@ pub(crate) fn check_access(
     });
 }
 
+#[allow(dead_code)]
 async fn access(
     ctx: &Context,
     database: &PgPool,
