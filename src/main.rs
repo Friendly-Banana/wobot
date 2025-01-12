@@ -142,6 +142,7 @@ async fn poise(
                 info!("Started reminder thread");
                 //check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
                 //info!("Started access thread");
+                load_bot_emojis(ctx).await?;
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
