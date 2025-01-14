@@ -136,7 +136,7 @@ async fn next(
     let labels = get_emojis_for_labels().await?;
     let reply = create_menu_embed(CreateReply::default(), day, &labels);
     ctx.send(reply.content(format!(
-        "Today's Menu in [{}]({})",
+        "The menu in [{}]({})",
         canteen.name,
         link_location(&canteen)
     )))
@@ -159,7 +159,7 @@ async fn week(
         reply = create_menu_embed(reply, day, &labels);
     }
     ctx.send(reply.content(format!(
-        "This week's Menu in [{}]({})",
+        "This week's menu in [{}]({})",
         canteen.name,
         link_location(&canteen)
     )))

@@ -1,17 +1,15 @@
-use std::convert::identity;
-use std::time::Duration;
-
+use chrono::Utc;
 use poise::serenity_prelude::model::timestamp;
 use poise::serenity_prelude::{CreateEmbed, FormattedTimestamp, Mentionable, User, UserId};
 use poise::CreateReply;
 use sqlx::{query, query_as};
+use std::convert::identity;
 use timestamp::Timestamp;
 
-use crate::constants::{ONE_HOUR, ONE_YEAR};
+use crate::constants::TIMEZONE;
 use crate::{Context, Error};
 
-const MAX_REMINDER_TIME: Duration = ONE_YEAR;
-const DEFAULT_REMINDER_TIME: Duration = ONE_HOUR;
+const DEFAULT_REMINDER_TIME: chrono::Duration = chrono::Duration::hours(1);
 
 #[allow(dead_code)]
 pub(crate) struct Reminder {
@@ -31,18 +29,24 @@ pub(crate) async fn reminder(_: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn add(
     ctx: Context<'_>,
-    #[description = "when to notify\nsupports human-readable format like 3m\ndefault 1 hour, max 1 year"]
-    time: Option<String>,
+    #[description = "date or duration"] when: Option<String>,
     #[description = "The reminder message"] message: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let duration = match time {
-        Some(x) => parse_duration::parse(x.as_str())?.min(MAX_REMINDER_TIME),
-        None => DEFAULT_REMINDER_TIME,
+    let reminder_time = match when {
+        None => Utc::now() + DEFAULT_REMINDER_TIME,
+        Some(x) => match parse_duration::parse(&x) {
+            Ok(duration) => Utc::now() + chrono::Duration::from_std(duration)?,
+            Err(_) => dateparser::parse_with(
+                &x,
+                &TIMEZONE,
+                chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
+            )
+            .map_err(|e| format!("Is this a date or duration? {}", e))?,
+        },
     };
 
-    let reminder_time = chrono::Utc::now() + chrono::Duration::from_std(duration)?;
     let msg_id = ctx
         .say(format!(
             "Reminder set for {}",
@@ -64,24 +68,21 @@ pub(crate) async fn add(
 pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
     ctx.defer().await?;
 
-    let (title, due) = if let Some(user) = user {
-        (
-            format!("Reminders for {}", user.name),
-            query_as!(
-                Reminder,
-                "SELECT * FROM reminder WHERE user_id = $1",
-                user.id.get() as i64
-            )
-            .fetch_all(&ctx.data().database)
-            .await?,
+    let title;
+    let due = if let Some(user) = user {
+        title = format!("Reminders for {}", user.name);
+        query_as!(
+            Reminder,
+            "SELECT * FROM reminder WHERE user_id = $1 ORDER BY time",
+            user.id.get() as i64
         )
+        .fetch_all(&ctx.data().database)
+        .await?
     } else {
-        (
-            "Reminders".to_string(),
-            query_as!(Reminder, "SELECT * FROM reminder")
-                .fetch_all(&ctx.data().database)
-                .await?,
-        )
+        title = "Reminders".to_string();
+        query_as!(Reminder, "SELECT * FROM reminder ORDER BY time")
+            .fetch_all(&ctx.data().database)
+            .await?
     };
     const MAX_FIELD_LENGTH: usize = 1024;
     let mut e = CreateEmbed::default().title(title);

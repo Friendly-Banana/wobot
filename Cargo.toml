@@ -21,7 +21,7 @@ itertools = "0.14.0"
 ab_glyph = "0.2.29"
 imageproc = "0.25.0"
 image = "0.25.5"
-stitchy-core = { version = "0.1.3", git = "https://github.com/Friendly-Banana/Stitchy" }
+stitchy-core = "0.1.3"
 ics = "0.5"
 uwuify = "0.2.2"
 serde = "1.0.217"

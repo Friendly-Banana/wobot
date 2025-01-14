@@ -1,11 +1,10 @@
+use crate::{done, Context, Error};
 use itertools::Itertools;
-use mini_moka::sync::Cache;
 use poise::serenity_prelude::{Emoji, GuildId, Message, ReactionType};
 use reqwest::Url;
 use std::sync::LazyLock;
 use tokio::sync::RwLock;
-
-use crate::{done, Context, Error};
+use tracing::info;
 
 /// create embeds and remove tracking parameters from URLs
 #[poise::command(slash_command, prefix_command, track_edits)]
@@ -32,13 +31,20 @@ pub(crate) async fn embed(ctx: Context<'_>, mut url: Url) -> Result<(), Error> {
     Ok(())
 }
 
-static BOT_EMOJI_CACHE: LazyLock<RwLock<Vec<Emoji>>> = LazyLock::new(|| RwLock::new(Vec::new()));
-static GUILD_EMOJI_CACHE: LazyLock<Cache<GuildId, Vec<Emoji>>> = LazyLock::new(|| Cache::new(10));
+static EMOJI_CACHE: LazyLock<RwLock<Vec<Emoji>>> = LazyLock::new(|| RwLock::new(Vec::new()));
 
-pub(crate) async fn load_bot_emojis(ctx: &poise::serenity_prelude::Context) -> Result<(), Error> {
-    let emojis = ctx.get_application_emojis().await?;
-    let mut cache = BOT_EMOJI_CACHE.write().await;
+pub(crate) async fn load_bot_emojis(
+    ctx: &poise::serenity_prelude::Context,
+    guilds: Vec<GuildId>,
+) -> Result<(), Error> {
+    let mut emojis = ctx.get_application_emojis().await?;
+    for guild in guilds {
+        let mut guild_emojis = guild.emojis(ctx).await?;
+        emojis.append(&mut guild_emojis);
+    }
+    let mut cache = EMOJI_CACHE.write().await;
     *cache = emojis;
+    info!("Loaded {} emojis", cache.len());
     Ok(())
 }
 
@@ -60,24 +66,11 @@ async fn autocomplete_emoji_in_text(ctx: Context<'_>, partial: &str) -> Vec<Stri
     vec![]
 }
 
-async fn autocomplete_emoji<'a>(ctx: Context<'_>, partial: &'a str) -> Vec<String> {
-    let mut guild_emojis = vec![];
-    if let Some(guild_id) = ctx.guild_id() {
-        match GUILD_EMOJI_CACHE.get(&guild_id) {
-            Some(emojis) => guild_emojis = emojis,
-            None => {
-                if let Ok(emojis) = guild_id.emojis(ctx).await {
-                    GUILD_EMOJI_CACHE.insert(guild_id, emojis.clone());
-                    guild_emojis = emojis;
-                }
-            }
-        }
-    };
-    let bot_emojis = BOT_EMOJI_CACHE.read().await;
-    bot_emojis
+async fn autocomplete_emoji(_ctx: Context<'_>, partial: &str) -> Vec<String> {
+    let emojis = EMOJI_CACHE.read().await;
+    emojis
         .iter()
-        .chain(guild_emojis.iter())
-        .filter(move |e| e.name.starts_with(partial))
+        .filter(move |e| e.available && e.name.contains(partial))
         .take(25) // max 25 suggestions
         .map(|e| e.to_string())
         .collect_vec()

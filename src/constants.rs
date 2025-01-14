@@ -12,7 +12,6 @@ use tracing::info;
 pub(crate) const TIMEZONE: Tz = Berlin;
 pub(crate) const ONE_HOUR: Duration = Duration::from_secs(60 * 60);
 pub(crate) const ONE_DAY: Duration = Duration::from_secs(24 * 60 * 60);
-pub(crate) const ONE_YEAR: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 
 pub(crate) const WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
 pub(crate) const FONT_PATH: &str = "assets/rockwill.ttf";

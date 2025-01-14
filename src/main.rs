@@ -134,6 +134,7 @@ async fn poise(
                     register_in_guild(ctx, &get_active_commands(modules), guild.id).await?;
                     info!("Loaded modules for guild {}", guild.id);
                 }
+                load_bot_emojis(ctx, ready.guilds.iter().map(|g| g.id).collect_vec()).await?;
                 let reaction_msgs: Vec<_> = query!("SELECT message_id FROM reaction_roles")
                     .fetch_all(&pool)
                     .await?;
@@ -142,7 +143,6 @@ async fn poise(
                 info!("Started reminder thread");
                 //check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
                 //info!("Started access thread");
-                load_bot_emojis(ctx).await?;
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),

@@ -1,6 +1,5 @@
-use std::string::ToString;
-
-use crate::{Context, Error};
+use crate::commands::load_bot_emojis;
+use crate::{done, Context, Error};
 
 /// Test bot function, should respond with "pong!"
 #[poise::command(slash_command, prefix_command)]
@@ -24,6 +23,7 @@ pub(crate) async fn register_commands(ctx: Context<'_>) -> Result<(), Error> {
 
 #[poise::command(slash_command, prefix_command, owners_only)]
 pub(crate) async fn latency(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
     let manager = ctx.framework().shard_manager.clone();
     let runners = manager.runners.lock().await;
     let id = ctx.serenity_context().shard_id;
@@ -36,4 +36,13 @@ pub(crate) async fn latency(ctx: Context<'_>) -> Result<(), Error> {
         }
     };
     Ok(())
+}
+
+#[poise::command(slash_command, prefix_command, owners_only)]
+pub(crate) async fn refresh_emojis(ctx: Context<'_>) -> Result<(), Error> {
+    ctx.defer_ephemeral().await?;
+    let guilds = ctx.http().get_guilds(None, None).await?;
+    let ids = guilds.iter().map(|g| g.id).collect();
+    load_bot_emojis(ctx.serenity_context(), ids).await?;
+    done!(ctx);
 }

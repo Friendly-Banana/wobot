@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM reminder",
+  "query": "SELECT * FROM reminder WHERE user_id = $1 ORDER BY time",
   "describe": {
     "columns": [
       {
@@ -30,7 +30,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Int8"
+      ]
     },
     "nullable": [
       false,
@@ -40,5 +42,5 @@
       false
     ]
   },
-  "hash": "a86d6fb7b28c1a2f395139aab460dd5142b96432716bbc8654af04ffd65af0c8"
+  "hash": "2571a1d66c5d81e9ce4102fe7848b232b7a7c4bba92a975e9fd576aafa0e1ad6"
 }
