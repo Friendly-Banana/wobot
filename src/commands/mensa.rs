@@ -249,10 +249,10 @@ async fn get_menu(
         }
         Err(e) => {
             if e.status() == Some(StatusCode::NOT_FOUND) {
-                return Err(Error::from("No menu found, maybe the mensa is closed?"));
+                return Err("No menu found, maybe the mensa is closed?".into());
             }
 
-            Err(Error::from(format!("Menu fetching failed: {}", e)))
+            Err(format!("Menu fetching failed: {}", e).into())
         }
     }
 }

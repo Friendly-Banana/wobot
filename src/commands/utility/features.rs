@@ -144,7 +144,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         } else if press.data.custom_id == filter_id {
             let values = match &press.data.kind {
                 ComponentInteractionDataKind::StringSelect { values } => values,
-                _ => return Err(Error::from("invalid select menu interaction")),
+                _ => return Err("invalid select menu interaction".into()),
             };
             let new_state = values[0].parse::<i64>().map_or(All, FeatureState::from);
             if new_state != state {

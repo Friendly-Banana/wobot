@@ -15,6 +15,7 @@ use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use shuttle_runtime::{CustomError, SecretStore};
 use shuttle_serenity::ShuttleSerenity;
+use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
 use tracing::info;
 
@@ -163,16 +164,12 @@ async fn poise(
         })
         .build();
 
-    let client = ClientBuilder::new(
-        discord_token,
-        GatewayIntents::GUILD_MESSAGES
-            | GatewayIntents::MESSAGE_CONTENT
-            | GatewayIntents::GUILD_MESSAGE_REACTIONS
-            | GatewayIntents::GUILD_VOICE_STATES,
-    )
-    .framework(framework)
-    .await
-    .map_err(CustomError::new)?;
+    let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
+    let client = ClientBuilder::new(discord_token, intents)
+        .framework(framework)
+        .register_songbird()
+        .await
+        .map_err(CustomError::new)?;
 
     Ok(client.into())
 }
