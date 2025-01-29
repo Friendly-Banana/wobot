@@ -5,7 +5,7 @@ use poise::serenity_prelude::{
 };
 use sqlx::{query, PgPool};
 use tokio::time::interval;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::Error;
 
@@ -21,6 +21,7 @@ pub(crate) fn check_reminders(ctx: Context, period: Duration, database: PgPool) 
             }
         }
     });
+    info!("Started reminder thread");
 }
 
 async fn send_reminders(ctx: &Context, database: &PgPool) -> Result<(), Error> {

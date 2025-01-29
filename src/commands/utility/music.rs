@@ -3,6 +3,7 @@ use crate::{Context, Error};
 use poise::async_trait;
 use poise::serenity_prelude::GuildId;
 use songbird::input::YoutubeDl;
+use songbird::tracks::TrackHandle;
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler, Songbird, TrackEvent};
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
@@ -77,15 +78,7 @@ async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
     let mut handler = handler_lock.lock().await;
     let src = YoutubeDl::new(HTTP_CLIENT.clone(), url);
     let song = handler.enqueue_input(src.into()).await;
-    song.set_volume(VOLUME.load(Ordering::Relaxed) as f32 / 100.0)?;
-
-    song.add_event(
-        Event::Track(TrackEvent::End),
-        SongEndNotifier {
-            guild: ctx.guild_id().unwrap(),
-            manager,
-        },
-    )?;
+    track_song(manager, ctx.guild_id().unwrap(), song)?;
 
     ctx.reply("Added to the queue!").await?;
     Ok(())
@@ -140,4 +133,17 @@ impl VoiceEventHandler for SongEndNotifier {
         }
         None
     }
+}
+
+pub(crate) fn track_song(
+    manager: Arc<Songbird>,
+    guild: GuildId,
+    song: TrackHandle,
+) -> Result<(), Error> {
+    song.set_volume(VOLUME.load(Ordering::Relaxed) as f32 / 100.0)?;
+    song.add_event(
+        Event::Track(TrackEvent::End),
+        SongEndNotifier { guild, manager },
+    )?;
+    Ok(())
 }

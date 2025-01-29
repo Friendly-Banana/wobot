@@ -19,10 +19,13 @@ use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
 use tracing::info;
 
+#[cfg(feature = "activity")]
+use crate::check_access::check_access;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
 use crate::constants::ONE_DAY;
 
+#[cfg(feature = "activity")]
 mod check_access;
 mod check_reminder;
 mod commands;
@@ -63,6 +66,7 @@ struct Config {
     link_fixes: HashMap<String, LinkFix>,
     auto_reactions: HashMap<String, ReactionType>,
     auto_replies: Vec<AutoReply>,
+    entry_sounds: HashMap<UserId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -80,6 +84,7 @@ pub(crate) struct Data {
     link_fixes: HashMap<String, LinkFix>,
     auto_reactions: Vec<(String, ReactionType)>,
     auto_replies: Vec<AutoReply>,
+    entry_sounds: HashMap<UserId, String>,
     reaction_msgs: RwLock<HashSet<u64>>,
 }
 
@@ -141,9 +146,8 @@ async fn poise(
                     .await?;
                 info!("Loaded reaction messages");
                 check_reminders(ctx.clone(), Duration::from_secs(60), pool.clone());
-                info!("Started reminder thread");
-                //check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
-                //info!("Started access thread");
+                #[cfg(feature = "activity")]
+                check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
@@ -156,6 +160,7 @@ async fn poise(
                     link_fixes: config.link_fixes,
                     auto_reactions: config.auto_reactions.into_iter().collect_vec(),
                     auto_replies: config.auto_replies,
+                    entry_sounds: config.entry_sounds,
                     reaction_msgs: RwLock::new(
                         reaction_msgs.iter().map(|f| f.message_id as u64).collect(),
                     ),
