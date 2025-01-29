@@ -9,7 +9,7 @@ use songbird::input::File;
 use sqlx::query;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::commands::{change_reaction_role, track_song};
 use crate::{CacheEntry, Data, Error};
@@ -23,9 +23,11 @@ pub(crate) async fn event_handler(
     data: &Data,
 ) -> Result<(), Error> {
     match event {
-        FullEvent::VoiceStateUpdate { new, .. } => {
+        FullEvent::VoiceStateUpdate { new, old } => {
             if let Some(guild) = new.guild_id {
-                if new.channel_id.is_some() && data.entry_sounds.contains_key(&new.user_id) {
+                let switched_channel = old.as_ref().is_some_and(|old| old.channel_id.is_some());
+                let user_has_entry_sound = data.entry_sounds.contains_key(&new.user_id);
+                if new.channel_id.is_some() && !switched_channel && user_has_entry_sound {
                     let channel = new.channel_id.unwrap();
                     let sound = data.entry_sounds.get(&new.user_id).unwrap().clone();
                     let file = File::new(PathBuf::from(sound));
@@ -33,10 +35,6 @@ pub(crate) async fn event_handler(
                         .await
                         .expect("Songbird initialized")
                         .clone();
-                    if manager.get(guild).is_some() {
-                        info!("Skipped entry sound, playing something else already");
-                        return Ok(());
-                    }
                     let handler_lock = manager.join(guild, channel).await?;
                     let mut handler = handler_lock.lock().await;
                     let song = handler.play_input(file.into());
