@@ -45,7 +45,7 @@ async fn birthday(
     event_channel: &HashMap<GuildId, ChannelId>,
 ) -> Result<(), Error> {
     let due = query!(
-        "UPDATE birthdays SET last_congratulated = now() WHERE birthday = now()::date AND (last_congratulated IS NULL OR last_congratulated < now()::date)  RETURNING guild_id, user_id"
+        "UPDATE birthdays SET last_congratulated = current_date WHERE birthday + ((DATE_PART('year', current_date) - DATE_PART('year', birthday)) || ' years')::interval = current_date AND (last_congratulated IS NULL OR last_congratulated < current_date) RETURNING guild_id, user_id"
     )
         .fetch_all(database)
         .await?;

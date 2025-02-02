@@ -124,7 +124,7 @@ async fn poise(
                 Box::pin(handler::event_handler(ctx, event, _framework, data))
             },
             prefix_options: PrefixFrameworkOptions {
-                prefix: Some("w".to_string()),
+                prefix: Some("!".to_string()),
                 edit_tracker: Some(Arc::from(EditTracker::for_timespan(Duration::from_secs(
                     60,
                 )))),
