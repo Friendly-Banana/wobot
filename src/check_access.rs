@@ -1,5 +1,4 @@
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 
 use poise::futures_util::StreamExt;
 use poise::serenity_prelude::{Context, CreateMessage, GuildId};
@@ -7,16 +6,12 @@ use sqlx::{query, PgPool};
 use tokio::time::interval;
 use tracing::{debug, error, info, warn};
 
+use crate::constants::ONE_DAY;
 use crate::{Access, Error};
 
-pub(crate) fn check_access(
-    ctx: Context,
-    period: Duration,
-    database: PgPool,
-    config: HashMap<GuildId, Access>,
-) {
+pub(crate) fn check_access(ctx: Context, database: PgPool, config: HashMap<GuildId, Access>) {
     tokio::spawn(async move {
-        let mut interval = interval(period);
+        let mut interval = interval(ONE_DAY);
 
         loop {
             interval.tick().await;

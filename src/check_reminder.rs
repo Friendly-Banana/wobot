@@ -9,9 +9,9 @@ use tracing::{debug, error, info};
 
 use crate::Error;
 
-pub(crate) fn check_reminders(ctx: Context, period: Duration, database: PgPool) {
+pub(crate) fn check_reminders(ctx: Context, database: PgPool) {
     tokio::spawn(async move {
-        let mut interval = interval(period);
+        let mut interval = interval(Duration::from_secs(60));
 
         loop {
             interval.tick().await;

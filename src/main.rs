@@ -21,12 +21,14 @@ use tracing::info;
 
 #[cfg(feature = "activity")]
 use crate::check_access::check_access;
+use crate::check_birthday::check_birthdays;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
 use crate::constants::ONE_DAY;
 
 #[cfg(feature = "activity")]
 mod check_access;
+mod check_birthday;
 mod check_reminder;
 mod commands;
 mod constants;
@@ -145,9 +147,14 @@ async fn poise(
                     .fetch_all(&pool)
                     .await?;
                 info!("Loaded reaction messages");
-                check_reminders(ctx.clone(), Duration::from_secs(60), pool.clone());
+                check_reminders(ctx.clone(), pool.clone());
+                check_birthdays(
+                    ctx.clone(),
+                    pool.clone(),
+                    config.event_channel_per_guild.clone(),
+                );
                 #[cfg(feature = "activity")]
-                check_access(ctx.clone(), ONE_DAY, pool.clone(), config.access_per_guild);
+                check_access(ctx.clone(), pool.clone(), config.access_per_guild);
                 Ok(Data {
                     cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
                     dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),

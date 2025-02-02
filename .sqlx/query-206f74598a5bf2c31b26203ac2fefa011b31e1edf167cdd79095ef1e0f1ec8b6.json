@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO birthdays (guild_id, user_id, birthday) VALUES ($1, $2, $3) ON CONFLICT (user_id) DO UPDATE SET guild_id = $1, birthday = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "206f74598a5bf2c31b26203ac2fefa011b31e1edf167cdd79095ef1e0f1ec8b6"
+}
