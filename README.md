@@ -6,14 +6,14 @@ WoBot comes with a ton of features, including:
 
 ##### Improved Events:
 
-create a Discord Event, a thread and allow RSVP via reactions with a **single** command  
-export all events to your calendar (works on mobile)
+* create a Discord Event, a thread and allow RSVP via reactions with a **single** command
+* export all events to your calendar (works on mobile)
 
 ##### Improved Emojis:
 
-`add`, `rename` and `remove`  
-`upload` to convert images into emojis  
-`copy` emojis from other servers to your own
+* `add`, `rename` and `remove`
+* `upload` to convert images into emojis
+* `copy` emojis from other servers to your own
 
 ##### Easy Reaction Roles
 
@@ -21,8 +21,8 @@ simply react with the emojis you want
 
 ##### Memes:
 
-Obama: when someone congratulates themselves  
-Cutie Pie: tell your friends how cute they are
+* Obama: when someone congratulates themselves
+* Cutie Pie: tell your friends how cute they are
 
 ##### ToDo list
 
@@ -34,21 +34,21 @@ schedule whatever you like for later
 
 #### Mensa plan
 
-know what's up for lunch  
-show the next available plan  
-automatically skips weekends
-find your friends
+* know what's up for lunch
+* show the next available plan
+* automatically skips weekends
+* find your friends
 
 ## Images
 
 Not yet convinced? Have some images:
 
-![](images/reaction_roles.png)
-![](images/emoji.png)
-![](images/mensa.png)
-![](images/todo.png)
-![](images/obama.png)
-![](images/cutie_pie.png)
+![meme with four labeled sections: cherry pie, apple pie, pumpkin pie and the WoBot logo, a cartoon robot, tagged as 'cutie pie'.](images/cutie_pie.png)
+![Obama giving himself a medal, both Obamas are labelled 'WoBot'](images/obama.png)
+![list of reaction roles each with corresponding message and emoji](images/reaction_roles.png)
+![Discord embed asking whether to create an emoji](images/emoji.png)
+![list of dishes in the Mensa Garching](images/mensa.png)
+![list of features as embeds with selector for feature state](images/todo.png)
 
 ## Contributing
 
@@ -59,28 +59,16 @@ Please make sure to run `cargo fmt` before committing.
 ### Running the Bot
 
 1. [Install Rust](https://www.rust-lang.org/tools/install)
-2. [Install Shuttle](https://docs.shuttle.rs/getting-started/installation)
-3. Optional: [Install PostgresQL](https://www.postgresql.org/download/), you can also use a Docker container
-4. Change the Database URL (`postgres://test:pass@localhost:5432/postgres`) in `main.rs` to your local
-   PostgresQL instance, if you leave it blank shuttle will use a Docker container.
-5. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
-6. Copy the bot token and put it in a `Secrets.toml` file in the root directory:
+2. [Install Shuttle](https://docs.shuttle.dev/getting-started/installation)
+3. [Install Docker](https://docs.docker.com/install/) (or use
+   your [local PostgresQL](https://docs.shuttle.dev/docs/local-run#local-runs-with-databases))
+4. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
+5. Copy the bot token and put it in a `Secrets.toml` file in the root directory:
     ```toml
-    DISCORD_TOKEN = "your token here"
+    DISCORD_TOKEN = "<your token>"
     ```
-   You can also create a `Secrets.dev.toml` file if you want to test with a different token for development.
-7. Invite the bot to your server with the `ADMINISTRATOR` permission. You can also only choose the permissions you need.
-8. Run the bot with `cargo shuttle run`
-
-Some features also require a font and images from the `assets` folder.
-Due to legal reasons, not all of them can be provided here. What's missing:
-
-- `rockwill.ttf`: [Rockwill Font](https://fontmeme.com/fonts/rockwill-font/)
-- `obama_medal.jpg`: [Obama Medal](https://a.pinatafarm.com/1015x627/ade80aa63d/obama-medal.jpg)
-- `mensa_plan.png`: [Mensa Plan](https://www.meck-architekten.de/projekte/id/2019-mensa-campus-garching/) or
-  from [here](https://www.heinze.de/architekturobjekt/zoom/12979688/)
-
-Simply download them and place them in the `assets` folder with the same name.
+6. Invite the bot to your server with all permissions you need (`ADMINISTRATOR` is the easiest).
+7. Run the bot with `shuttle run`
 
 ## Technical Overview
 
@@ -91,7 +79,7 @@ It's hosted on [Shuttle](https://www.shuttle.rs/) and uses a PostgresQL database
 The mensa plan uses the [Eat API](https://tum-dev.github.io/eat-api), the mensa coordinates link
 to [Google Maps](https://www.google.com/maps).
 
-The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan) is also written by myself in Elixir.
+The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan) is written by myself in Elixir.
 
 ### Configuration
 

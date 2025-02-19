@@ -96,8 +96,7 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 #[shuttle_runtime::main]
 async fn poise(
     #[shuttle_runtime::Secrets] secret_store: SecretStore,
-    #[shuttle_shared_db::Postgres(local_uri = "postgres://test:pass@localhost:5432/postgres")]
-    pool: PgPool,
+    #[shuttle_shared_db::Postgres] pool: PgPool,
 ) -> ShuttleSerenity {
     let discord_token = secret_store
         .get("DISCORD_TOKEN")
