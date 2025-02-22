@@ -46,6 +46,7 @@ struct AutoReply {
     #[serde(default)]
     /// colour as an integer
     colour: Colour,
+    chance: Option<f32>,
 }
 
 #[derive(Debug, Deserialize)]
