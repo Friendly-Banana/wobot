@@ -103,9 +103,10 @@ async fn auto_reply(
         .filter(|r| r.keywords.iter().any(|s| content.contains(s)));
 
     for reply in matches {
-        if thread_rng()
-            .sample::<f32, rand::distributions::OpenClosed01>(rand::distributions::OpenClosed01)
-            <= reply.chance.unwrap_or(1.0)
+        if reply.chance.is_none()
+            || thread_rng()
+                .sample::<f32, rand::distributions::OpenClosed01>(rand::distributions::OpenClosed01)
+                <= reply.chance.unwrap_or(1.0)
         {
             let keyword = reply.keywords.first().unwrap();
             query!("INSERT INTO auto_replies(user_id, keyword, count) VALUES ($1, $2, 1) ON CONFLICT (keyword, user_id) DO UPDATE SET count = auto_replies.count + 1", new_message.author.id.get() as i64, keyword).execute(&data.database).await?;
