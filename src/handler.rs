@@ -4,6 +4,7 @@ use poise::serenity_prelude::{
     Mentionable, Message, UserId,
 };
 use poise::FrameworkContext;
+use rand::random;
 use regex::Regex;
 use songbird::input::File;
 use sqlx::query;
@@ -102,12 +103,16 @@ async fn auto_reply(
         .filter(|r| r.keywords.iter().any(|s| content.contains(s)));
 
     for reply in matches {
+        if reply.chance.is_some_and(|chance| random::<f32>() > chance) {
+            continue;
+        }
+
         let keyword = reply.keywords.first().unwrap();
         query!("INSERT INTO auto_replies(user_id, keyword, count) VALUES ($1, $2, 1) ON CONFLICT (keyword, user_id) DO UPDATE SET count = auto_replies.count + 1", new_message.author.id.get() as i64, keyword).execute(&data.database).await?;
         let stats = query!(
-                    "SELECT SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%'",
-                    keyword
-                )
+                        "SELECT SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%'",
+                        keyword
+                    )
             .fetch_one(&data.database)
             .await?;
         let amount_replied = stats.count.unwrap_or_default().to_string();
