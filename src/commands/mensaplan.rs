@@ -19,7 +19,7 @@ use crate::commands::utils::{get_avatar_url, load_avatar};
 use crate::constants::{HTTP_CLIENT, ONE_DAY, ONE_HOUR};
 use crate::{Context, Error};
 
-const MENSA_PLAN_API: &str = "https://mensaplan.gigalixirapp.com/api";
+const MENSA_PLAN_API: &str = "https://mensa.gabriels.cloud/api";
 
 const MENSA_PLAN_PATH: &str = "assets/mensa_plan.png";
 static MENSA_PLAN_IMAGE: OnceLock<DynamicImage> = OnceLock::new();

@@ -48,19 +48,17 @@ pub(crate) async fn load_bot_emojis(
     Ok(())
 }
 
-async fn autocomplete_emoji_in_text(ctx: Context<'_>, partial: &str) -> Vec<String> {
-    // autocomplete can be max 100 chars
-    if partial.len() < 2 || partial.len() > 90 {
-        return vec![];
-    }
-    // emoji names are max 32 characters long
-    let len = partial.len();
-    let start = if len > 33 { len - 33 } else { 0 };
-    if let Some(index) = partial[start..].rfind(':') {
-        return autocomplete_emoji(ctx, &partial[start + index + 1..])
+async fn autocomplete_emoji_in_text(ctx: Context<'_>, text: &str) -> Vec<String> {
+    if let Some(index) = text.rfind(':') {
+        // at least 2 chars after the colon
+        if text.len() - index < 2 {
+            return vec![];
+        }
+        return autocomplete_emoji(ctx, &text[index + 1..])
             .await
             .iter()
-            .map(|e| format!("{}{}", &partial[..start + index], e))
+            .map(|e| format!("{}{}", &text[..index], e))
+            .filter(|e| e.len() <= 100)
             .collect();
     }
     vec![]
