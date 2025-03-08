@@ -92,35 +92,34 @@ WoBot can react with both Unicode and custom Discord emojis, even animated ones.
 
 #### Example Config
 
-```hjson
-{
-  // channel for event threads
-  event_channel_per_guild: {
-    // guild_id: channel_id
-    0: 0
+```json
+// channel for event threads
+event_channel_per_guild: {
+  // guild_id: channel_id
+  1: 1
+},
+auto_reactions: {
+  robot: {
+    name: "🤖"
   }
-  auto_reactions: {
-    robot: {
-      name: "🤖"
-    }
-    vibing: {
-      animated: true
-      name: vibing
-      // emoji id
-      id: 0
-    }
+  vibing: {
+    animated: true
+    name: vibing
+    // emoji id
+    id: 1
   }
-  auto_replies: [
-    {
-      keywords: [
-        "wobot info"
-        "wobot help"
-      ]
-      // discord user id
-      user: 0
-      title: About WoBot
-      description: "Hi, I'm **WoBot**, your friendly neighborhood bot. Please send any questions or feedback to my author, {user}. This message was sent {count} times. Have a nice day!"
-      colour: 15844367
-    }
-}
+},
+auto_replies: [
+  {
+    keywords: [
+      "wobot info"
+      "wobot help"
+    ]
+    // discord user id
+    user: 1
+    title: About WoBot
+    description: "Hi, I'm **WoBot**, your friendly neighborhood bot. Please send any questions or feedback to my author, {user}. This message was sent {count} times. Have a nice day!"
+    colour: 15844367
+  }
+]
 ```

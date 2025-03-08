@@ -1,8 +1,5 @@
 use itertools::Itertools;
-use poise::serenity_prelude::{
-    CacheHttp, Context, CreateEmbed, CreateEmbedAuthor, CreateMessage, FullEvent, GuildId,
-    Mentionable, Message, UserId,
-};
+use poise::serenity_prelude::*;
 use poise::FrameworkContext;
 use rand::random;
 use regex::Regex;
@@ -10,10 +7,13 @@ use songbird::input::File;
 use sqlx::query;
 use std::path::PathBuf;
 use std::sync::LazyLock;
+#[cfg(feature = "activity")]
 use tracing::warn;
 
 use crate::commands::{change_reaction_role, track_song};
-use crate::{CacheEntry, Data, Error};
+#[cfg(feature = "activity")]
+use crate::CacheEntry;
+use crate::{Data, Error};
 
 static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\w+\b").unwrap());
 
@@ -41,11 +41,13 @@ pub(crate) async fn event_handler(
                     let song = handler.play_input(file.into());
                     track_song(manager, guild, song)?;
                 }
+                #[cfg(feature = "activity")]
                 update_activity(data, guild, new.user_id).await;
             }
             Ok(())
         }
         FullEvent::ReactionAdd { add_reaction } => {
+            #[cfg(feature = "activity")]
             if let Some(guild) = add_reaction.guild_id {
                 if let Some(user) = add_reaction.user_id {
                     update_activity(data, guild, user).await;
@@ -65,6 +67,7 @@ pub(crate) async fn event_handler(
                 auto_react(ctx, data, new_message, &content),
                 auto_reply(ctx, data, new_message, &content),
                 async {
+                    #[cfg(feature = "activity")]
                     if let Some(guild) = new_message.guild_id {
                         update_activity(data, guild, new_message.author.id).await;
                     }
@@ -76,6 +79,7 @@ pub(crate) async fn event_handler(
     }
 }
 
+#[cfg(feature = "activity")]
 async fn update_activity(data: &Data, guild: GuildId, user: UserId) {
     if let Some(guild_activity) = data.activity_per_guild.get(&guild) {
         if guild_activity.get(&user).is_none() {

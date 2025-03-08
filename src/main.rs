@@ -4,8 +4,16 @@ use std::fs::read_to_string;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+#[cfg(feature = "activity")]
+use crate::check_access::check_access;
+use crate::check_birthday::check_birthdays;
+use crate::check_reminder::check_reminders;
+use crate::commands::*;
+#[cfg(feature = "activity")]
+use crate::constants::ONE_DAY;
 use anyhow::Context as _;
 use itertools::Itertools;
+#[cfg(feature = "activity")]
 use mini_moka::sync::{Cache, CacheBuilder};
 use poise::builtins::{register_globally, register_in_guild};
 use poise::serenity_prelude::{
@@ -17,14 +25,7 @@ use shuttle_runtime::{CustomError, SecretStore};
 use shuttle_serenity::ShuttleSerenity;
 use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
-use tracing::info;
-
-#[cfg(feature = "activity")]
-use crate::check_access::check_access;
-use crate::check_birthday::check_birthdays;
-use crate::check_reminder::check_reminders;
-use crate::commands::*;
-use crate::constants::ONE_DAY;
+use tracing::{error, info};
 
 #[cfg(feature = "activity")]
 mod check_access;
@@ -64,14 +65,22 @@ struct Access {
 }
 #[derive(Deserialize)]
 struct Config {
+    #[cfg(feature = "activity")]
+    #[serde(default)]
     access_per_guild: HashMap<GuildId, Access>,
+    #[serde(default)]
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
+    #[serde(default)]
     link_fixes: HashMap<String, LinkFix>,
+    #[serde(default)]
     auto_reactions: HashMap<String, ReactionType>,
+    #[serde(default)]
     auto_replies: Vec<AutoReply>,
+    #[serde(default)]
     entry_sounds: HashMap<UserId, String>,
 }
 
+#[cfg(feature = "activity")]
 #[derive(Debug, Clone)]
 struct CacheEntry {}
 
@@ -82,6 +91,7 @@ pub(crate) struct Data {
     dog_api_token: String,
     mp_api_token: String,
     database: PgPool,
+    #[cfg(feature = "activity")]
     activity_per_guild: HashMap<GuildId, Cache<UserId, CacheEntry>>,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
     link_fixes: HashMap<String, LinkFix>,
@@ -97,14 +107,22 @@ type Context<'a> = poise::Context<'a, Data, Error>;
 #[shuttle_runtime::main]
 async fn poise(
     #[shuttle_runtime::Secrets] secret_store: SecretStore,
-    #[shuttle_shared_db::Postgres] pool: PgPool,
+    #[shuttle_shared_db::Postgres(local_uri = "postgres://test:pass@localhost:5432/postgres")]
+    pool: PgPool,
 ) -> ShuttleSerenity {
     let discord_token = secret_store
         .get("DISCORD_TOKEN")
         .context("'DISCORD_TOKEN' was not found")?;
 
-    let config_data = read_to_string("assets/config.hjson").context("Couldn't load config file")?;
-    let config: Config = deser_hjson::from_str(&config_data).context("Bad config")?;
+    let config_data = read_to_string("assets/config.hjson").unwrap_or_default();
+    let config: Config = deser_hjson::from_str(&config_data)
+        .context("Bad config")
+        .map_err(|e| {
+            // TODO we need the debug output, fix/remove shuttle
+            error!("{:#}", e);
+            e
+        })?;
+    #[cfg(feature = "activity")]
     let activity = config
         .access_per_guild
         .keys()
@@ -162,6 +180,7 @@ async fn poise(
                         .get("MENSAPLAN_API_TOKEN")
                         .unwrap_or("".to_string()),
                     database: pool,
+                    #[cfg(feature = "activity")]
                     activity_per_guild: activity,
                     event_channel_per_guild: config.event_channel_per_guild,
                     link_fixes: config.link_fixes,
