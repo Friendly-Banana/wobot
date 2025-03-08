@@ -11,7 +11,7 @@ use tracing::{debug, warn};
 const MAN_VIEW_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MSG_MAX_LEN: usize = 1950;
 
-fn remove_first_and_last_line(input: &str) -> String {
+fn remove_first_and_last_line(input: String) -> String {
     let lines: Vec<&str> = input.lines().collect();
     if lines.len() <= 2 {
         return String::new();
@@ -23,7 +23,8 @@ fn remove_first_and_last_line(input: &str) -> String {
 pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
     debug!("man {}", text);
     let com = Command::new("man").arg(text).output()?;
-    let page = remove_first_and_last_line(&*String::from_utf8_lossy(&com.stdout));
+    let com_str = String::from_utf8_lossy(&com.stdout).parse()?;
+    let page = remove_first_and_last_line(com_str);
 
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx.id());
