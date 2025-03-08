@@ -3,6 +3,7 @@ use poise::builtins::register_in_guild;
 use poise::{ChoiceParameter, Command};
 use sqlx::{query, PgPool};
 
+use crate::commands::man::man;
 use crate::commands::*;
 use crate::{Context, Data, Error};
 
@@ -149,7 +150,14 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
                 music(),
             ],
             Module::Events => vec![event(), export_events(), reaction_role(), birthday()],
-            Module::Misc => vec![boop(), keyword_statistics(), uwu(), uwu_text(), ping()],
+            Module::Misc => vec![
+                boop(),
+                keyword_statistics(),
+                uwu(),
+                uwu_text(),
+                ping(),
+                man(),
+            ],
         });
     }
     commands
