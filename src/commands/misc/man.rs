@@ -5,6 +5,7 @@ use poise::serenity_prelude::{
     CreateInteractionResponseMessage,
 };
 use poise::CreateReply;
+use std::borrow::Cow;
 use std::process::Command;
 use std::time::Duration;
 use tracing::{debug, warn};
@@ -12,7 +13,7 @@ use tracing::{debug, warn};
 const MAN_VIEW_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MSG_MAX_LEN: usize = 2000 - 25; // -25 to account for the title
 
-fn get_pages(input: &str) -> Vec<String> {
+fn get_pages(input: Cow<str>) -> Vec<String> {
     let lines: Vec<&str> = input.lines().collect();
 
     if lines.len() <= 2 {
@@ -21,28 +22,22 @@ fn get_pages(input: &str) -> Vec<String> {
 
     let stripped_lines = &lines[1..lines.len() - 1];
 
-    let mut res: Vec<String> = vec![];
-
-    let mut lines: usize = 0;
-
-    let mut collector: String = "".into();
+    let mut pages = vec![];
+    let mut msg: String = "".into();
 
     for line in stripped_lines {
         // +1 because of newline
-        if lines + line.len() + 1 > MSG_MAX_LEN {
-            lines = 0;
-
-            res.push(collector);
-            collector = "".into();
+        if msg.len() + line.len() + 1 > MSG_MAX_LEN {
+            pages.push(msg);
+            msg = "".into();
         }
 
-        lines += line.len() + 1;
-        collector.push_str(format!("{}\n", line).as_str());
+        msg.push_str(line);
+        msg.push('\n');
     }
 
-    res.push(collector);
-
-    res
+    pages.push(msg);
+    pages
 }
 
 #[poise::command(slash_command, prefix_command)]
@@ -50,8 +45,7 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
     ctx.defer().await?;
     debug!("man {}", text);
     let com = Command::new("man").args(text.split(' ')).output()?;
-    let com_str = String::from_utf8_lossy(&com.stdout);
-    let pages = get_pages(&com_str);
+    let pages = get_pages(String::from_utf8_lossy(&com.stdout));
 
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx.id());
@@ -66,16 +60,14 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
             CreateButton::new(&next_button_id).emoji('▶'),
         ])];
 
-        let m = CreateReply::default()
+        CreateReply::default()
             .components(components)
             .content(format!(
                 "**Page {}/{}**```{}```",
                 idx + 1,
                 page_count,
                 pages[idx]
-            ));
-
-        m
+            ))
     };
 
     let reply_handle = ctx.send(reply).await?;
@@ -87,13 +79,13 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
         .await
     {
         if press.data.custom_id == next_button_id {
-            idx = idx + 1;
+            idx += 1;
             if idx >= page_count {
                 idx = 0;
             }
         } else if press.data.custom_id == prev_button_id {
             if idx > 0 {
-                idx = idx - 1;
+                idx -= 1;
             } else {
                 idx = page_count - 1;
             }
@@ -107,7 +99,6 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
         }
 
         // Update the message with the new page contents
-
         let message = CreateInteractionResponseMessage::default().content(format!(
             "**Page {}/{}**```{}```",
             idx + 1,
