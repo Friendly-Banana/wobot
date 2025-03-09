@@ -149,7 +149,14 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
                 music(),
             ],
             Module::Events => vec![event(), export_events(), reaction_role(), birthday()],
-            Module::Misc => vec![boop(), keyword_statistics(), uwu(), uwu_text(), ping()],
+            Module::Misc => vec![
+                boop(),
+                keyword_statistics(),
+                uwu(),
+                uwu_text(),
+                ping(),
+                man(),
+            ],
         });
     }
     commands
