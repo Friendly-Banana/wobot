@@ -40,6 +40,8 @@ fn get_pages(input: &str) -> Vec<String> {
         collector.push_str(format!("{}\n", line).as_str());
     }
 
+    res.push(collector);
+
     res
 }
 
@@ -47,7 +49,7 @@ fn get_pages(input: &str) -> Vec<String> {
 pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
     ctx.defer().await?;
     debug!("man {}", text);
-    let com = Command::new("man").arg(text).output()?;
+    let com = Command::new("man").args(text.split(' ')).output()?;
     let com_str = String::from_utf8_lossy(&com.stdout);
     let pages = get_pages(&com_str);
 
