@@ -1,3 +1,4 @@
+use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::{Context, Error};
 use poise::serenity_prelude::{
     ComponentInteractionCollector, CreateActionRow, CreateButton, CreateInteractionResponse,
@@ -9,29 +10,53 @@ use std::time::Duration;
 use tracing::{debug, warn};
 
 const MAN_VIEW_TIMEOUT: Duration = Duration::from_secs(10 * 60);
-const MSG_MAX_LEN: usize = 1950;
+const MSG_MAX_LEN: usize = 2000 - 25; // -25 to account for the title
 
-fn remove_first_and_last_line(input: String) -> String {
+fn get_pages(input: &str) -> Vec<String> {
     let lines: Vec<&str> = input.lines().collect();
+
     if lines.len() <= 2 {
-        return String::new();
+        return vec!["No man page available!".into()];
     }
-    lines[1..lines.len() - 1].join("\n")
+
+    let stripped_lines = &lines[1..lines.len() - 1];
+
+    let mut res: Vec<String> = vec![];
+
+    let mut lines: usize = 0;
+
+    let mut collector: String = "".into();
+
+    for line in stripped_lines {
+        // +1 because of newline
+        if lines + line.len() + 1 > MSG_MAX_LEN {
+            lines = 0;
+
+            res.push(collector);
+            collector = "".into();
+        }
+
+        lines += line.len() + 1;
+        collector.push_str(format!("{}\n", line).as_str());
+    }
+
+    res
 }
 
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
+    ctx.defer().await?;
     debug!("man {}", text);
     let com = Command::new("man").arg(text).output()?;
-    let com_str = String::from_utf8_lossy(&com.stdout).parse()?;
-    let page = remove_first_and_last_line(com_str);
+    let com_str = String::from_utf8_lossy(&com.stdout);
+    let pages = get_pages(&com_str);
 
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx.id());
     let next_button_id = format!("{}next", ctx.id());
 
     let mut idx: usize = 0;
-    let page_count = calculate_count(&page);
+    let page_count = pages.len();
 
     let reply = {
         let components = vec![CreateActionRow::Buttons(vec![
@@ -39,17 +64,19 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
             CreateButton::new(&next_button_id).emoji('▶'),
         ])];
 
-        let m = CreateReply::default().components(components);
+        let m = CreateReply::default()
+            .components(components)
+            .content(format!(
+                "**Page {}/{}**```{}```",
+                idx + 1,
+                page_count,
+                pages[idx]
+            ));
 
-        m.content(format!(
-            "**Page {}/{}**\n```{}```",
-            idx + 1,
-            page_count + 1,
-            get_segment(&page, idx)
-        ))
+        m
     };
 
-    ctx.send(reply).await?;
+    let reply_handle = ctx.send(reply).await?;
 
     while let Some(press) = ComponentInteractionCollector::new(ctx)
         .channel_id(ctx.channel_id())
@@ -59,14 +86,14 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
     {
         if press.data.custom_id == next_button_id {
             idx = idx + 1;
-            if idx > page_count {
+            if idx >= page_count {
                 idx = 0;
             }
         } else if press.data.custom_id == prev_button_id {
             if idx > 0 {
                 idx = idx - 1;
             } else {
-                idx = page_count;
+                idx = page_count - 1;
             }
         } else {
             // This is an unrelated button interaction
@@ -80,10 +107,10 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
         // Update the message with the new page contents
 
         let message = CreateInteractionResponseMessage::default().content(format!(
-            "**page {}/{}**\n```{}```",
+            "**Page {}/{}**```{}```",
             idx + 1,
-            page_count + 1,
-            get_segment(&page, idx)
+            page_count,
+            pages[idx]
         ));
 
         press
@@ -93,45 +120,5 @@ pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
             )
             .await?;
     }
-    Ok(())
-}
-
-fn calculate_count(msg: &str) -> usize {
-    let mut count: usize = 0;
-    let mut lines: usize = 0;
-
-    for line in msg.lines() {
-        if lines + line.len() > MSG_MAX_LEN {
-            count = count + 1;
-            lines = line.len();
-        } else {
-            lines += line.len();
-        }
-    }
-    count
-}
-
-fn get_segment(msg: &str, mut idx: usize) -> String {
-    let mut ret: String = "".into();
-
-    let mut lines: usize = 0;
-
-    for line in msg.lines() {
-        if lines + line.len() > MSG_MAX_LEN {
-            if idx > 0 {
-                idx = idx - 1;
-                lines = 0;
-            } else {
-                return ret;
-            }
-        }
-
-        lines += line.len();
-
-        if idx == 0 {
-            ret.push_str(format!("{}\n", line).as_str());
-        }
-    }
-
-    ret
+    remove_components_but_keep_embeds(ctx, CreateReply::default(), reply_handle).await
 }
