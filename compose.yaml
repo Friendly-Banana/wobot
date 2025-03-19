@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wobot
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: wobot_db
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    networks:
+      - wobot_network
+
+  wobot:
+    image: wobot
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://example:example@db:5432/wobot_db
+    env_file:
+      - .env
+    volumes:
+      - ./assets:/assets
+    networks:
+      - wobot_network
+
+networks:
+  wobot_network:
+    driver: bridge
