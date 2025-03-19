@@ -9,9 +9,9 @@ activity = []
 
 [dependencies]
 ab_glyph = "0.2.29"
-anyhow = "1.0.95"
+anyhow = "1.0.97"
 base64 = "0.22.1"
-chrono = "0.4.39"
+chrono = "0.4.40"
 chrono-tz = "0.10.0"
 # https://github.com/waltzofpearls/dateparser/issues/53
 dateparser = { version = "0.2.1", git = "https://github.com/RiediJohannes/dateparser" }
@@ -24,18 +24,15 @@ mini-moka = "0.10.3"
 parse_duration = "2.1.1"
 percent-encoding = "2.3.1"
 poise = "0.6.1"
-rand = "0.8.5"
+rand = "0.9.0"
 regex = "1.11.1"
-reqwest = { version = "0.11", features = ["json"] }
-serde = "1.0.217"
-shuttle-runtime = "0.51.0"
-shuttle-serenity = "0.51.0"
-shuttle-shared-db = { version = "0.51.0", default-features = false, features = ["postgres", "sqlx"] }
-songbird = { version = "0.4.6", features = ["builtin-queue"] }
+reqwest = { version = "0.12.15", features = ["json"] }
+serde = "1.0.219"
+songbird = { version = "0.5.0", features = ["builtin-queue"] }
 symphonia = { version = "0.5", features = ["mp3"] }
-sqlx = { version = "0.8.3", default-features = false, features = ["runtime-tokio", "tls-rustls", "chrono", "postgres", "sqlx-postgres", "bigdecimal"] }
-stitchy-core = "0.1.3"
-tokio = "1.43.0"
+sqlx = { version = "0.8.3", default-features = false, features = ["runtime-tokio", "tls-rustls", "chrono", "postgres", "sqlx-postgres", "bigdecimal", "migrate", "macros"] }
+stitchy-core = "0.1.5"
+tokio = { version = "1.44.1", features = ["rt-multi-thread"] }
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 uwuify = "0.2.2"

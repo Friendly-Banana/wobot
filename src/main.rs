@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fmt::Debug;
 use std::fs::read_to_string;
 use std::sync::{Arc, RwLock};
@@ -11,7 +12,6 @@ use crate::check_reminder::check_reminders;
 use crate::commands::*;
 #[cfg(feature = "activity")]
 use crate::constants::ONE_DAY;
-use anyhow::Context as _;
 use itertools::Itertools;
 #[cfg(feature = "activity")]
 use mini_moka::sync::{Cache, CacheBuilder};
@@ -21,11 +21,9 @@ use poise::serenity_prelude::{
 };
 use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
-use shuttle_runtime::{CustomError, SecretStore};
-use shuttle_serenity::ShuttleSerenity;
 use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
-use tracing::{error, info};
+use tracing::info;
 
 #[cfg(feature = "activity")]
 mod check_access;
@@ -104,24 +102,12 @@ pub(crate) struct Data {
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[shuttle_runtime::main]
-async fn poise(
-    #[shuttle_runtime::Secrets] secret_store: SecretStore,
-    #[shuttle_shared_db::Postgres(local_uri = "postgres://test:pass@localhost:5432/postgres")]
-    pool: PgPool,
-) -> ShuttleSerenity {
-    let discord_token = secret_store
-        .get("DISCORD_TOKEN")
-        .context("'DISCORD_TOKEN' was not found")?;
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt::init();
 
     let config_data = read_to_string("assets/config.hjson").unwrap_or_default();
-    let config: Config = deser_hjson::from_str(&config_data)
-        .context("Bad config")
-        .map_err(|e| {
-            // TODO we need the debug output, fix/remove shuttle
-            error!("{:#}", e);
-            e
-        })?;
+    let config: Config = deser_hjson::from_str(&config_data).expect("Failed to parse config");
     #[cfg(feature = "activity")]
     let activity = config
         .access_per_guild
@@ -130,10 +116,14 @@ async fn poise(
         .map(|guild| (guild, CacheBuilder::new(500).time_to_live(ONE_DAY).build()))
         .collect();
 
+    let pool = PgPool::connect(&env::var("DATABASE_URL").expect("Set DATABASE_URL"))
+        .await
+        .expect("Failed to connect to database");
+
     sqlx::migrate!()
         .run(&pool)
         .await
-        .context("Migrations failed")?;
+        .expect("Migrations failed");
 
     let framework = Framework::builder()
         .options(poise::FrameworkOptions {
@@ -174,11 +164,9 @@ async fn poise(
                 #[cfg(feature = "activity")]
                 check_access(ctx.clone(), pool.clone(), config.access_per_guild);
                 Ok(Data {
-                    cat_api_token: secret_store.get("CAT_API_TOKEN").unwrap_or("".to_string()),
-                    dog_api_token: secret_store.get("DOG_API_TOKEN").unwrap_or("".to_string()),
-                    mp_api_token: secret_store
-                        .get("MENSAPLAN_API_TOKEN")
-                        .unwrap_or("".to_string()),
+                    cat_api_token: env::var("CAT_API_TOKEN").unwrap_or_default(),
+                    dog_api_token: env::var("DOG_API_TOKEN").unwrap_or_default(),
+                    mp_api_token: env::var("MENSAPLAN_API_TOKEN").unwrap_or_default(),
                     database: pool,
                     #[cfg(feature = "activity")]
                     activity_per_guild: activity,
@@ -195,12 +183,12 @@ async fn poise(
         })
         .build();
 
+    let discord_token = env::var("DISCORD_TOKEN").expect("Set DISCORD_TOKEN");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let client = ClientBuilder::new(discord_token, intents)
         .framework(framework)
         .register_songbird()
-        .await
-        .map_err(CustomError::new)?;
+        .await;
 
-    Ok(client.into())
+    client.unwrap().start().await.unwrap();
 }

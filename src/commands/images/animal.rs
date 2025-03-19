@@ -3,7 +3,7 @@ use std::ops::Range;
 use poise::serenity_prelude::CreateEmbed;
 use poise::{command, CreateReply};
 #[cfg(not(test))]
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use serde::Deserialize;
 
 use crate::constants::HTTP_CLIENT;
@@ -25,7 +25,7 @@ async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<St
     #[cfg(test)]
     let api_choice = tests::API_CHOICE.load(std::sync::atomic::Ordering::SeqCst);
     #[cfg(not(test))]
-    let api_choice = thread_rng().gen_range(API_RANGE);
+    let api_choice = rng().random_range(API_RANGE);
 
     match api_choice {
         0 => do_json::<TopLevelImage>("https://randomfox.ca/floof/").await,

@@ -1,6 +1,3 @@
-use std::collections::VecDeque;
-use std::time::Duration;
-
 use crate::{done, Context, Data, Error};
 use anyhow::Context as _;
 use poise::serenity_prelude::{
@@ -9,6 +6,8 @@ use poise::serenity_prelude::{
 };
 use poise::{serenity_prelude, CreateReply};
 use sqlx::{query, query_as};
+use std::collections::VecDeque;
+use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(60);

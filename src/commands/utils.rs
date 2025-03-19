@@ -1,15 +1,14 @@
+use crate::constants::{HTTP_CLIENT, ONE_DAY};
+use crate::{Context, Error};
 use anyhow::Context as _;
 use image::codecs::png::PngEncoder;
 use image::DynamicImage;
 use mini_moka::sync::Cache;
 use poise::serenity_prelude::{Colour, CreateAttachment, CreateEmbed, User};
 use poise::{CreateReply, ReplyHandle};
-use rand::prelude::SliceRandom;
-use rand::thread_rng;
+use rand::prelude::IndexedRandom;
+use rand::rng;
 use std::sync::LazyLock;
-
-use crate::constants::{HTTP_CLIENT, ONE_DAY};
-use crate::{Context, Error};
 
 const COLORS: [Colour; 19] = [
     Colour::BLURPLE,
@@ -34,7 +33,7 @@ const COLORS: [Colour; 19] = [
 ];
 
 pub(crate) fn random_color() -> Colour {
-    *COLORS.choose(&mut thread_rng()).unwrap()
+    *COLORS.choose(&mut rng()).unwrap()
 }
 
 static AVATAR_CACHE: LazyLock<Cache<String, DynamicImage>> = LazyLock::new(|| {
