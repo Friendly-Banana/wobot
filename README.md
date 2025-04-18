@@ -56,25 +56,25 @@ If you have a great idea or suggestion, feel free to open [an issue](https://git
 If you want a feature right now and can code, open [a pull request](https://github.com/Friendly-Banana/wobot/pulls).
 Please make sure to run `cargo fmt` before committing.
 
-### Running the Bot
+## Running the Bot
 
-With Cargo:
+1. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Copy the `DISCORD_TOKEN`
+3. Invite the bot to your server with all permissions you need (`ADMINISTRATOR` is the easiest).
+
+#### With Cargo:
 
 1. [Install Rust](https://www.rust-lang.org/tools/install)
-2. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
-3. Invite the bot to your server with all permissions you need (`ADMINISTRATOR` is the easiest).
-4. Run the bot with `DISCORD_TOKEN='<your token>' cargo run`
+2. Run the bot with `DISCORD_TOKEN='<your token>' cargo run`
 
-With Docker Compose:
+#### With Docker Compose:
 
 1. [Install Docker Compose](https://docs.docker.com/compose/install/)
-2. Build the docker file: `docker build -t wobot .`
-3. Copy the bot token and put it in a `.env` file in the root directory:
+2. Put the bot token in a `.env` file in the root directory:
     ```
-    DISCORD_TOKEN='<your token>'
+    export DISCORD_TOKEN='<your token>'
     ```
-4. Copy the `assets` folder. You can add additional files like the config here.
-5. Run the bot with `docker compose up -d`
+3. Run the bot with `docker compose up -d`
 
 ## Technical Overview
 
@@ -85,7 +85,23 @@ It can be hosted on any server and uses a PostgresQL database.
 The mensa plan uses the [Eat API](https://tum-dev.github.io/eat-api), the mensa coordinates link
 to [Google Maps](https://www.google.com/maps).
 
-The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan) is written by myself in Elixir.
+The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan#api) is written by myself in Elixir.
+
+### Environment Variables
+
+Docker Compose automatically reads them from a `.env` file, for Cargo/the binary you need to set them, e.g. like so `source .env`.
+Only `DISCORD_TOKEN` is required, the others are optional.
+
+<details>
+<summary>Example .env file</summary>
+
+```sh
+export DISCORD_TOKEN=''		# https://discord.com/developers/applications
+export CAT_API_TOKEN=''		# https://thecatapi.com/signup
+export DOG_API_TOKEN=''		# https://thedogapi.com/signup
+export MENSAPLAN_TOKEN=''	# https://github.com/Friendly-Banana/mensaplan#api
+```
+</details>
 
 ### Configuration
 
@@ -128,4 +144,12 @@ auto_replies: [
     colour: 15844367
   }
 ]
+link_fixes: {
+  instagram.com: {
+    tracking: "igsh"
+  }
+  reddit.com: {
+    host: "old.reddit.com"
+  }
+}
 ```

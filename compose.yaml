@@ -12,12 +12,13 @@ services:
       - wobot_network
 
   wobot:
+    build: .
     image: wobot
     restart: unless-stopped
     depends_on:
       - db
     environment:
-      DATABASE_URL: postgres://example:example@db:5432/wobot_db
+      DATABASE_URL: postgres://wobot:example@db:5432/wobot_db
     env_file:
       - .env
     volumes:

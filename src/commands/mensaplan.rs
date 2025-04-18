@@ -67,7 +67,7 @@ static API_USER_CACHE: LazyLock<Cache<UserId, MPUser>> = LazyLock::new(|| Cache:
 static API_GROUP_CACHE: LazyLock<Cache<GuildId, MPGroup>> = LazyLock::new(|| Cache::new(10));
 
 async fn send_with_auth(ctx: Context<'_>, rb: RequestBuilder) -> Result<Response, reqwest::Error> {
-    rb.bearer_auth(&ctx.data().mp_api_token).send().await
+    rb.bearer_auth(&ctx.data().mensaplan_token).send().await
 }
 
 #[poise::command(slash_command, prefix_command, subcommands("add", "delete", "show"))]

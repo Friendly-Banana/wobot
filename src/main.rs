@@ -87,7 +87,7 @@ struct CacheEntry {}
 pub(crate) struct Data {
     cat_api_token: String,
     dog_api_token: String,
-    mp_api_token: String,
+    mensaplan_token: String,
     database: PgPool,
     #[cfg(feature = "activity")]
     activity_per_guild: HashMap<GuildId, Cache<UserId, CacheEntry>>,
@@ -166,7 +166,7 @@ async fn main() {
                 Ok(Data {
                     cat_api_token: env::var("CAT_API_TOKEN").unwrap_or_default(),
                     dog_api_token: env::var("DOG_API_TOKEN").unwrap_or_default(),
-                    mp_api_token: env::var("MENSAPLAN_API_TOKEN").unwrap_or_default(),
+                    mensaplan_token: env::var("MENSAPLAN_TOKEN").unwrap_or_default(),
                     database: pool,
                     #[cfg(feature = "activity")]
                     activity_per_guild: activity,
@@ -183,7 +183,7 @@ async fn main() {
         })
         .build();
 
-    let discord_token = env::var("DISCORD_TOKEN").expect("Set DISCORD_TOKEN");
+    let discord_token = env::var("DISCORD_TOKEN").expect("Env var DISCORD_TOKEN is required");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let client = ClientBuilder::new(discord_token, intents)
         .framework(framework)
