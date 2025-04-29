@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use tokio::sync::RwLock;
 use tracing::info;
 
-/// create embeds and remove tracking parameters from URLs
+/// Create embeds and remove tracking parameters from URLs
 #[poise::command(slash_command, prefix_command, track_edits)]
 pub(crate) async fn embed(ctx: Context<'_>, mut url: Url) -> Result<(), Error> {
     if let Some(mut host) = url.host_str() {
@@ -74,7 +74,7 @@ async fn autocomplete_emoji(_ctx: Context<'_>, partial: &str) -> Vec<String> {
         .collect_vec()
 }
 
-/// Say something
+/// Make the bot say something
 #[poise::command(slash_command, prefix_command, track_edits)]
 pub(crate) async fn say(
     ctx: Context<'_>,
@@ -90,7 +90,7 @@ pub(crate) async fn say(
     }
 }
 
-/// React to a message
+/// Make the bot react to a message
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn react(
     ctx: Context<'_>,

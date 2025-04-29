@@ -16,7 +16,7 @@ use crate::{done, Context, Error};
 
 const EVENT_URL: &str = "https://discord.com/events/";
 
-/// Export all events on this server as ICS calendar file
+/// Export all events on this server as an ICS calendar file
 #[poise::command(slash_command, prefix_command, guild_only)]
 pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
     const ICS_TIME_FORMAT: &str = "%Y%m%dT%H%M%SZ";

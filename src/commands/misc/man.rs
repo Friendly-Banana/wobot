@@ -40,6 +40,7 @@ fn get_pages(input: Cow<str>) -> Vec<String> {
     pages
 }
 
+/// Consult a man page
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
     ctx.defer().await?;

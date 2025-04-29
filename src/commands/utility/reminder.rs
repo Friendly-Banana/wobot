@@ -100,7 +100,7 @@ pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Err
     Ok(())
 }
 
-/// delete your scheduled reminders by the start of its content
+/// Delete your scheduled reminders by the start of its content
 /// bot owner can delete all reminders
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn delete(
