@@ -32,10 +32,7 @@ pub(crate) async fn event_handler(
                     let channel = new.channel_id.unwrap();
                     let sound = data.entry_sounds.get(&new.user_id).unwrap().clone();
                     let file = File::new(PathBuf::from(sound));
-                    let manager = songbird::get(ctx)
-                        .await
-                        .expect("Songbird initialized")
-                        .clone();
+                    let manager = songbird::get(ctx).await.expect("Songbird initialized");
                     let handler_lock = manager.join(guild, channel).await?;
                     let mut handler = handler_lock.lock().await;
                     let song = handler.play_input(file.into());
@@ -71,11 +68,30 @@ pub(crate) async fn event_handler(
                     if let Some(guild) = new_message.guild_id {
                         update_activity(data, guild, new_message.author.id).await;
                     }
+                },
+                async {
+                    #[cfg(feature = "activity")]
+                    if let Some(guild) = new_message.guild_id {
+                        update_message_count(data, guild, new_message.author.id).await;
+                    }
                 }
             );
             result.0.and(result.1)
         }
         _ => Ok(()),
+    }
+}
+
+#[cfg(feature = "activity")]
+async fn update_message_count(data: &Data, guild: GuildId, user: UserId) {
+    if data.activity_per_guild.get(&guild).is_none() {
+        return;
+    }
+    let result = query!("UPDATE activity SET message_count = message_count + 1 WHERE user_id = $1 AND guild_id = $2", user.get() as i64, guild.get() as i64)
+        .execute(&data.database)
+        .await;
+    if let Err(e) = result {
+        warn!("Failed to update message count for {}: {}", user.get(), e);
     }
 }
 

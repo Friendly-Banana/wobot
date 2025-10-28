@@ -16,9 +16,7 @@ use itertools::Itertools;
 #[cfg(feature = "activity")]
 use mini_moka::sync::{Cache, CacheBuilder};
 use poise::builtins::{register_globally, register_in_guild};
-use poise::serenity_prelude::{
-    ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, RoleId, UserId,
-};
+use poise::serenity_prelude::{ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, RoleId, UserId};
 use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use songbird::serenity::SerenityInit;
@@ -54,7 +52,7 @@ struct LinkFix {
     tracking: Option<String>,
 }
 
-#[allow(dead_code)]
+#[cfg(feature = "activity")]
 #[derive(Debug, Deserialize)]
 struct Access {
     log_channel: ChannelId,
@@ -89,6 +87,7 @@ pub(crate) struct Data {
     dog_api_token: String,
     mensaplan_token: String,
     database: PgPool,
+    /// debounce user activity to once per day
     #[cfg(feature = "activity")]
     activity_per_guild: HashMap<GuildId, Cache<UserId, CacheEntry>>,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
@@ -116,7 +115,7 @@ async fn main() {
         .map(|guild| (guild, CacheBuilder::new(500).time_to_live(ONE_DAY).build()))
         .collect();
 
-    let pool = PgPool::connect(&env::var("DATABASE_URL").expect("Set DATABASE_URL"))
+    let pool = PgPool::connect(&env::var("DATABASE_URL").expect("DATABASE_URL required"))
         .await
         .expect("Failed to connect to database");
 
@@ -183,7 +182,7 @@ async fn main() {
         })
         .build();
 
-    let discord_token = env::var("DISCORD_TOKEN").expect("Env var DISCORD_TOKEN is required");
+    let discord_token = env::var("DISCORD_TOKEN").expect("DISCORD_TOKEN required");
     let intents = GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT;
     let client = ClientBuilder::new(discord_token, intents)
         .framework(framework)

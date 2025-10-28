@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [features]
+default = ["activity"]
 activity = []
 
 [dependencies]
