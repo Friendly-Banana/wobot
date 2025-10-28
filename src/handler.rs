@@ -84,7 +84,7 @@ pub(crate) async fn event_handler(
 
 #[cfg(feature = "activity")]
 async fn update_message_count(data: &Data, guild: GuildId, user: UserId) {
-    if data.activity_per_guild.get(&guild).is_none() {
+    if !data.activity_per_guild.contains_key(&guild) {
         return;
     }
     let result = query!("UPDATE activity SET message_count = message_count + 1 WHERE user_id = $1 AND guild_id = $2", user.get() as i64, guild.get() as i64)

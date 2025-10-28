@@ -20,7 +20,7 @@ pub async fn floof(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-const API_RANGE: Range<i32> = 0..5;
+const API_RANGE: Range<i32> = 0..6;
 async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<String, Error> {
     #[cfg(test)]
     let api_choice = tests::API_CHOICE.load(std::sync::atomic::Ordering::SeqCst);
@@ -39,6 +39,7 @@ async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<St
             let url = format!("https://api.thedogapi.com/v1/images/search?api_key={dog_api_token}");
             do_json::<TheCatAPI>(&url).await
         }
+        5 => do_json::<TopLevelURL>("https://cataas.com/cat?json=true").await,
         _ => unreachable!(),
     }
 }
@@ -82,16 +83,6 @@ struct DogCEO {
 impl AnimalImage for DogCEO {
     fn extract_url(self) -> String {
         self.message
-    }
-}
-#[derive(Deserialize)]
-struct CatAAS {
-    _id: String,
-}
-
-impl AnimalImage for CatAAS {
-    fn extract_url(self) -> String {
-        format!("https://cataas.com/cat/{}", self._id)
     }
 }
 

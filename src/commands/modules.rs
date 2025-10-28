@@ -136,6 +136,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Err
                 inactive(),
                 latency(),
                 servers(),
+                sql(),
                 refresh_emojis(),
             ],
             Module::Utility => vec![
