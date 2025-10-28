@@ -72,7 +72,7 @@ Please make sure to run `cargo fmt` before committing.
 1. [Install Docker Compose](https://docs.docker.com/compose/install/)
 2. Put the bot token in a `.env` file in the root directory:
     ```
-    export DISCORD_TOKEN='<your token>'
+    DISCORD_TOKEN='<your token>'
     ```
 3. Run the bot with `docker compose up -d`
 

@@ -5,8 +5,6 @@ use std::fs::read_to_string;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-#[cfg(feature = "activity")]
-use crate::check_access::check_access;
 use crate::check_birthday::check_birthdays;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
@@ -16,15 +14,15 @@ use itertools::Itertools;
 #[cfg(feature = "activity")]
 use mini_moka::sync::{Cache, CacheBuilder};
 use poise::builtins::{register_globally, register_in_guild};
-use poise::serenity_prelude::{ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, RoleId, UserId};
+use poise::serenity_prelude::{
+    ChannelId, ClientBuilder, Colour, GatewayIntents, GuildId, ReactionType, UserId,
+};
 use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
 use tracing::info;
 
-#[cfg(feature = "activity")]
-mod check_access;
 mod check_birthday;
 mod check_reminder;
 mod commands;
@@ -52,18 +50,11 @@ struct LinkFix {
     tracking: Option<String>,
 }
 
-#[cfg(feature = "activity")]
-#[derive(Debug, Deserialize)]
-struct Access {
-    log_channel: ChannelId,
-    active_days: u32,
-    descending_roles: Vec<RoleId>,
-}
 #[derive(Deserialize)]
 struct Config {
     #[cfg(feature = "activity")]
     #[serde(default)]
-    access_per_guild: HashMap<GuildId, Access>,
+    active_guilds: Vec<GuildId>,
     #[serde(default)]
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
     #[serde(default)]
@@ -87,7 +78,7 @@ pub(crate) struct Data {
     dog_api_token: String,
     mensaplan_token: String,
     database: PgPool,
-    /// debounce user activity to once per day
+    /// cache used to debounce user activity to once per day
     #[cfg(feature = "activity")]
     activity_per_guild: HashMap<GuildId, Cache<UserId, CacheEntry>>,
     event_channel_per_guild: HashMap<GuildId, ChannelId>,
@@ -109,9 +100,8 @@ async fn main() {
     let config: Config = deser_hjson::from_str(&config_data).expect("Failed to parse config");
     #[cfg(feature = "activity")]
     let activity = config
-        .access_per_guild
-        .keys()
-        .copied()
+        .active_guilds
+        .into_iter()
         .map(|guild| (guild, CacheBuilder::new(500).time_to_live(ONE_DAY).build()))
         .collect();
 
@@ -160,8 +150,6 @@ async fn main() {
                     pool.clone(),
                     config.event_channel_per_guild.clone(),
                 );
-                #[cfg(feature = "activity")]
-                check_access(ctx.clone(), pool.clone(), config.access_per_guild);
                 Ok(Data {
                     cat_api_token: env::var("CAT_API_TOKEN").unwrap_or_default(),
                     dog_api_token: env::var("DOG_API_TOKEN").unwrap_or_default(),

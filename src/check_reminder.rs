@@ -26,7 +26,7 @@ pub(crate) fn check_reminders(ctx: Context, database: PgPool) {
 
 async fn send_reminders(ctx: &Context, database: &PgPool) -> Result<(), Error> {
     let due = query!(
-        "DELETE FROM reminder WHERE time <= now() RETURNING channel_id, msg_id, user_id, content"
+        "DELETE FROM reminder WHERE time <= now() + INTERVAL '59 seconds' RETURNING channel_id, msg_id, user_id, content"
     )
     .fetch_all(database)
     .await?;

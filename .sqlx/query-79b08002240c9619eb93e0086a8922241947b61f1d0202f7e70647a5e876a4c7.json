@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM reminder WHERE time <= now() RETURNING channel_id, msg_id, user_id, content",
+  "query": "DELETE FROM reminder WHERE time <= now() + INTERVAL '59 seconds' RETURNING channel_id, msg_id, user_id, content",
   "describe": {
     "columns": [
       {
@@ -34,5 +34,5 @@
       false
     ]
   },
-  "hash": "df0bc9e150fa77c73f3e223a5824f16f4bba64c442f186bef94d68943014247e"
+  "hash": "79b08002240c9619eb93e0086a8922241947b61f1d0202f7e70647a5e876a4c7"
 }
