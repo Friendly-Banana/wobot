@@ -12,7 +12,11 @@ fn sql_value_to_string(row: &sqlx::postgres::PgRow, column_index: usize) -> Stri
             row.try_get::<Option<i64>, usize>(column_index)
                 .ok()
                 .flatten()
-                .map(|v| v.to_string())
+                .map(|v| match row.column(column_index).name() {
+                    "user_id" => format!("<@{v}>"),
+                    "channel_id" => format!("<#{v}>"),
+                    _ => v.to_string(),
+                })
         })
         .or_else(|| {
             row.try_get::<Option<i32>, usize>(column_index)
@@ -114,7 +118,7 @@ pub(crate) async fn sql(
             CreateReply::default().embed(
                 CreateEmbed::new()
                     .title("Query Result")
-                    .description(format!("```\n{}```", table)),
+                    .description(table),
             )
         } else {
             CreateReply::default()
