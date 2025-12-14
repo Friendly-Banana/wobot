@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt::Debug;
 use std::fs::read_to_string;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -21,6 +22,7 @@ use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use songbird::serenity::SerenityInit;
 use sqlx::{query, PgPool};
+use tokio::sync::Mutex;
 use tracing::info;
 
 mod check_birthday;
@@ -41,13 +43,47 @@ struct AutoReply {
     #[serde(default)]
     /// colour as an integer
     colour: Colour,
-    chance: Option<f32>,
+    chance: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
 struct LinkFix {
     host: Option<String>,
     tracking: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CeleryConfig {
+    prompt: String,
+    chance: f64,
+    cooldown: u64,
+}
+
+#[derive(Debug)]
+struct Celery {
+    prompt: String,
+    chance: f64,
+    cooldown: u64,
+    counter: AtomicU64,
+    mutex: Mutex<()>,
+}
+
+fn convert(config: HashMap<ChannelId, CeleryConfig>) -> HashMap<ChannelId, Celery> {
+    config
+        .into_iter()
+        .map(|(k, v)| {
+            (
+                k,
+                Celery {
+                    prompt: v.prompt,
+                    chance: v.chance,
+                    cooldown: v.cooldown,
+                    counter: AtomicU64::new(0),
+                    mutex: Mutex::new(()),
+                },
+            )
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -65,6 +101,8 @@ struct Config {
     auto_replies: Vec<AutoReply>,
     #[serde(default)]
     entry_sounds: HashMap<UserId, String>,
+    #[serde(default)]
+    celery: HashMap<ChannelId, CeleryConfig>,
 }
 
 #[cfg(feature = "activity")]
@@ -77,6 +115,7 @@ pub(crate) struct Data {
     cat_api_token: String,
     dog_api_token: String,
     mensaplan_token: String,
+    ollama_token: String,
     database: PgPool,
     /// cache used to debounce user activity to once per day
     #[cfg(feature = "activity")]
@@ -86,6 +125,7 @@ pub(crate) struct Data {
     auto_reactions: Vec<(String, ReactionType)>,
     auto_replies: Vec<AutoReply>,
     entry_sounds: HashMap<UserId, String>,
+    celery: HashMap<ChannelId, Celery>,
     reaction_msgs: RwLock<HashSet<u64>>,
 }
 
@@ -154,6 +194,7 @@ async fn main() {
                     cat_api_token: env::var("CAT_API_TOKEN").unwrap_or_default(),
                     dog_api_token: env::var("DOG_API_TOKEN").unwrap_or_default(),
                     mensaplan_token: env::var("MENSAPLAN_TOKEN").unwrap_or_default(),
+                    ollama_token: env::var("OLLAMA_TOKEN").unwrap_or_default(),
                     database: pool,
                     #[cfg(feature = "activity")]
                     activity_per_guild: activity,
@@ -162,8 +203,12 @@ async fn main() {
                     auto_reactions: config.auto_reactions.into_iter().collect_vec(),
                     auto_replies: config.auto_replies,
                     entry_sounds: config.entry_sounds,
+                    celery: convert(config.celery),
                     reaction_msgs: RwLock::new(
-                        reaction_msgs.iter().map(|f| f.message_id as u64).collect(),
+                        reaction_msgs
+                            .into_iter()
+                            .map(|f| f.message_id as u64)
+                            .collect(),
                     ),
                 })
             })

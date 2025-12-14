@@ -1,19 +1,21 @@
+use crate::commands::{change_reaction_role, track_song};
+use crate::constants::HTTP_CLIENT;
+#[cfg(feature = "activity")]
+use crate::CacheEntry;
+use crate::{Data, Error};
 use itertools::Itertools;
+use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::*;
 use poise::FrameworkContext;
-use rand::random;
+use rand::random_bool;
 use regex::Regex;
 use songbird::input::File;
 use sqlx::query;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
 #[cfg(feature = "activity")]
 use tracing::warn;
-
-use crate::commands::{change_reaction_role, track_song};
-#[cfg(feature = "activity")]
-use crate::CacheEntry;
-use crate::{Data, Error};
 
 static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\w+\b").unwrap());
 
@@ -63,6 +65,7 @@ pub(crate) async fn event_handler(
             let result = tokio::join!(
                 auto_react(ctx, data, new_message, &content),
                 auto_reply(ctx, data, new_message, &content),
+                celery_fact(ctx, data, new_message.channel_id),
                 async {
                     #[cfg(feature = "activity")]
                     if let Some(guild) = new_message.guild_id {
@@ -76,7 +79,7 @@ pub(crate) async fn event_handler(
                     }
                 }
             );
-            result.0.and(result.1)
+            result.0.and(result.1).and(result.2)
         }
         _ => Ok(()),
     }
@@ -123,7 +126,7 @@ async fn auto_reply(
         .filter(|r| r.keywords.iter().any(|s| content.contains(s)));
 
     for reply in matches {
-        if reply.chance.is_some_and(|chance| random::<f32>() > chance) {
+        if reply.chance.is_some_and(|chance| random_bool(chance)) {
             continue;
         }
 
@@ -180,5 +183,66 @@ async fn auto_react(
             new_message.react(&ctx.http, reaction.clone()).await?;
         }
     }
+    Ok(())
+}
+
+async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(), Error> {
+    if let Some(config) = data.celery.get(&channel) {
+        // saturating subtraction
+        let previous_value =
+            config
+                .counter
+                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
+                    if val == 0 {
+                        Some(0)
+                    } else {
+                        Some(val - 1)
+                    }
+                });
+        // not 0 now, still in cooldown
+        if previous_value.unwrap() > 1 {
+            return Ok(());
+        }
+        // unlucky
+        if !random_bool(config.chance) {
+            return Ok(());
+        }
+        // other thread was faster
+        let lock = config.mutex.try_lock();
+        if lock.is_err() {
+            return Ok(());
+        }
+        // reset cooldown and check if we waited so long another thread is done
+        if config
+            .counter
+            .compare_exchange(0, config.cooldown, Ordering::SeqCst, Ordering::SeqCst)
+            .is_err()
+        {
+            return Ok(());
+        }
+
+        let payload = json!({
+            "model": "deepseek-v3.1:671b",
+            "messages": [{"role": "user", "content": config.prompt}],
+            "stream": false
+        });
+
+        let response = HTTP_CLIENT
+            .post("https://ollama.com/api/chat")
+            .bearer_auth(&data.ollama_token)
+            .json(&payload)
+            .send()
+            .await?;
+
+        let json: json::Value = response.json().await?;
+
+        let fact = json["message"]["content"]
+            .as_str()
+            .unwrap_or("Celery contains negative calories, meaning you burn more energy chewing it than you gain from eating it!")
+            .to_string();
+        channel.say(&ctx.http, fact).await?;
+        drop(lock);
+    }
+
     Ok(())
 }
