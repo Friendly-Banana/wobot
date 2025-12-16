@@ -18,12 +18,6 @@ use crate::{Context, Error};
 const EAT_API_URL: &str = "https://tum-dev.github.io/eat-api";
 const GOOGLE_MAPS_SEARCH_URL: &str = "https://www.google.de/maps/place/";
 
-#[derive(Deserialize)]
-struct QueueStatus {
-    current: u32,
-    percent: f32,
-}
-
 #[allow(dead_code)]
 #[derive(Deserialize)]
 struct Location {
@@ -79,34 +73,23 @@ const DISCORD_FIELDS_ON_AN_EMBED_LIMIT: usize = 25;
 async fn list(ctx: Context<'_>) -> Result<(), Error> {
     ctx.defer().await?;
     let canteens = get_canteens().await?;
-    let mut queue_statuses = HashMap::new();
-    for canteen in &canteens {
-        if let Some(url) = &canteen.queue_status {
-            let queue_status = HTTP_CLIENT
-                .get(url)
-                .send()
-                .await?
-                .json::<QueueStatus>()
-                .await?;
-            queue_statuses.insert(&canteen.canteen_id, queue_status);
-        };
-    }
 
     let mut reply = CreateReply::default();
     let colour = random_color();
-    for c in canteens.chunks(DISCORD_FIELDS_ON_AN_EMBED_LIMIT) {
+    for c in canteens
+        .into_iter()
+        .chunks(DISCORD_FIELDS_ON_AN_EMBED_LIMIT)
+        .into_iter()
+    {
         let mut embed = CreateEmbed::default();
         for canteen in c {
-            let mut description =
-                format!("[{}]({})", canteen.location.address, link_location(canteen));
-            if queue_statuses.contains_key(&canteen.canteen_id) {
-                let queue_status = queue_statuses.get(&canteen.canteen_id).unwrap();
-                description.push_str(&format!(
-                    "\nQueue: {} ({:.0}%)",
-                    queue_status.current, queue_status.percent
-                ));
-            }
-            embed = embed.field(&canteen.name, description, true);
+            let description = format!(
+                "[{}]({})\n{}",
+                canteen.location.address,
+                link_location(&canteen),
+                canteen.queue_status.unwrap_or("".to_string())
+            );
+            embed = embed.field(canteen.name, description, true);
         }
         reply = reply.embed(embed.title("List of all canteens").color(colour));
     }

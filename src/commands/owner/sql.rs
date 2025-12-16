@@ -115,11 +115,8 @@ pub(crate) async fn sql(
         }
 
         let reply = if table.len() <= 4096 {
-            CreateReply::default().embed(
-                CreateEmbed::new()
-                    .title("Query Result")
-                    .description(table),
-            )
+            CreateReply::default()
+                .embed(CreateEmbed::new().title("Query Result").description(table))
         } else {
             CreateReply::default()
                 .content(format!("{} rows returned", rows.len()))
