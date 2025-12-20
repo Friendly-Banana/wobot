@@ -11,13 +11,19 @@ RUN apt-get update && apt-get install -y \
 RUN curl -L https://yt-dl.org/downloads/latest/youtube-dl -o /usr/local/bin/youtube-dl\
  && chmod a+rx /usr/local/bin/youtube-dl
 
-RUN --mount=type=bind,source=src,target=src \
-    --mount=type=bind,source=Cargo.toml,target=Cargo.toml \
-    --mount=type=bind,source=Cargo.lock,target=Cargo.lock \
-    --mount=type=cache,target=/usr/local/cargo/registry/ \
-    --mount=type=bind,source=migrations,target=migrations \
-    --mount=type=bind,source=.sqlx,target=.sqlx \
-cargo install --path .  --locked
+# build dependencies first
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && \
+    echo "// dummy file" > src/lib.rs && \
+    cargo build --release --locked && \
+    rm -rf src
+
+# rebuild with actual source
+COPY src ./src
+COPY migrations ./migrations
+COPY .sqlx ./.sqlx
+
+RUN cargo build --release --locked
 
 
 FROM debian:bookworm-slim
@@ -37,6 +43,6 @@ rm -rf /var/lib/apt/lists/*
 EOF
 
 COPY --from=builder /usr/local/bin/youtube-dl /usr/local/bin/youtube-dl
-COPY --from=builder /usr/local/cargo/bin/wobot /wobot
+COPY --from=builder /target/release/wobot /wobot
 
 CMD ["/wobot"]
