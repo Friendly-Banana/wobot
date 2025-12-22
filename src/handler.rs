@@ -14,7 +14,6 @@ use sqlx::query;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
-use tracing::error;
 #[cfg(feature = "activity")]
 use tracing::warn;
 
@@ -66,7 +65,7 @@ pub(crate) async fn event_handler(
             let result = tokio::join!(
                 auto_react(ctx, data, new_message, &content),
                 auto_reply(ctx, data, new_message, &content),
-                debug_celery(ctx, data, new_message.channel_id),
+                celery_fact(ctx, data, new_message.channel_id),
                 async {
                     #[cfg(feature = "activity")]
                     if let Some(guild) = new_message.guild_id {
@@ -187,18 +186,6 @@ async fn auto_react(
     Ok(())
 }
 
-async fn debug_celery(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(), Error> {
-    let a = celery_fact(ctx, data, channel).await;
-    let b = match a {
-        Err(e) => {
-            error!("Celery fact error: {}", e);
-            Err(e)
-        }
-        c => c,
-    };
-    b
-}
-
 async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(), Error> {
     if let Some(config) = data.celery.get(&channel) {
         // saturating subtraction
@@ -223,7 +210,6 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(
         // other thread was faster
         let lock = config.mutex.try_lock();
         if lock.is_err() {
-            println!("Celery: other thread was faster");
             return Ok(());
         }
         // reset cooldown and check if we waited so long another thread is done
@@ -232,17 +218,14 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(
             .compare_exchange(0, config.cooldown, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
         {
-            println!("Celery: other thread was way faster");
             return Ok(());
         }
-        println!("Celery: starting");
 
         let payload = json!({
             "model": "deepseek-v3.1:671b",
             "messages": [{"role": "user", "content": config.prompt}],
             "stream": false
         });
-        println!("Celery: built json {}", payload);
 
         let response = HTTP_CLIENT
             .post("https://ollama.com/api/chat")
@@ -250,23 +233,15 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(
             .json(&payload)
             .send()
             .await?;
-        println!(
-            "Celery: got response {:?} {:?} {:?}",
-            response.content_length(),
-            response.status(),
-            response.headers()
-        );
 
         let json: json::Value = response.json().await?;
-        println!("Celery: decoded response {}", json);
 
         let fact = json["message"]["content"]
             .as_str()
             .unwrap_or("Celery contains negative calories, meaning you burn more energy chewing it than you gain from eating it!")
             .to_string();
-        channel.say(&ctx.http, fact.clone()).await?;
+        channel.say(&ctx.http, fact).await?;
         drop(lock);
-        println!("Celery: sent message {}", fact);
     }
 
     Ok(())
