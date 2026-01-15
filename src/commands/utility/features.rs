@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use anyhow::anyhow;
 use poise::CreateReply;
 use poise::serenity_prelude::{
     ComponentInteractionCollector, ComponentInteractionDataKind, CreateActionRow, CreateButton,
@@ -144,7 +145,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         } else if press.data.custom_id == filter_id {
             let values = match &press.data.kind {
                 ComponentInteractionDataKind::StringSelect { values } => values,
-                _ => return Err("invalid select menu interaction".into()),
+                _ => return Err(anyhow!("invalid select menu interaction")),
             };
             let new_state = values[0].parse::<i64>().map_or(All, FeatureState::from);
             if new_state != state {

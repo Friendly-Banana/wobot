@@ -1,5 +1,6 @@
 use crate::constants::HTTP_CLIENT;
 use crate::{Context, Error};
+use anyhow::anyhow;
 use poise::async_trait;
 use poise::serenity_prelude::GuildId;
 use songbird::input::YoutubeDl;
@@ -24,7 +25,7 @@ static VOLUME: AtomicU8 = AtomicU8::new(50);
 #[poise::command(slash_command, prefix_command)]
 async fn volume(ctx: Context<'_>, #[description = "percent"] volume: u8) -> Result<(), Error> {
     if volume == 0 || volume > 200 {
-        return Err("Volume must be between 1 and 200".into());
+        return Err(anyhow!("Volume must be between 1 and 200"));
     }
     ctx.defer().await?;
     VOLUME.store(volume, Ordering::Relaxed);
@@ -35,7 +36,7 @@ async fn volume(ctx: Context<'_>, #[description = "percent"] volume: u8) -> Resu
     let handler_lock = match manager.get(ctx.guild_id().expect("guild_only")) {
         Some(handler) => handler,
         None => {
-            return Err("Not in a voice channel".into());
+            return Err(anyhow!("Not in a voice channel"));
         }
     };
     let handler = handler_lock.lock().await;
@@ -56,7 +57,7 @@ async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
         .get(&ctx.author().id)
         .and_then(|vs| vs.channel_id);
     if channel.is_none() {
-        return Err("Please join a voice channel first".into());
+        return Err(anyhow!("Please join a voice channel first"));
     }
 
     let manager = songbird::get(ctx.serenity_context())
@@ -71,7 +72,7 @@ async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
         Ok(handler) => handler,
         Err(e) => {
             error!("Failed to join voice channel: {:?}", e);
-            return Err("Failed to join voice channel".into());
+            return Err(anyhow!("Failed to join voice channel"));
         }
     };
 
@@ -106,7 +107,7 @@ async fn skip(ctx: Context<'_>) -> Result<(), Error> {
     let handler_lock = match manager.get(ctx.guild_id().expect("guild_only")) {
         Some(handler) => handler,
         None => {
-            return Err("Not in a voice channel".into());
+            return Err(anyhow!("Not in a voice channel"));
         }
     };
     let handler = handler_lock.lock().await;

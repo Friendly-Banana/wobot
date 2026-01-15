@@ -1,5 +1,5 @@
 use crate::{Context, Data, Error, done};
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use poise::serenity_prelude::{
     CacheHttp, ChannelId, EmojiId, GuildId, MESSAGE_CODE_LIMIT, Mentionable, Message, MessageId,
     Reaction, ReactionCollector, ReactionType, RoleId,
@@ -309,7 +309,7 @@ pub(crate) async fn change_reaction_role(
                     .message_id
                     .link(reaction.channel_id, reaction.guild_id)
             );
-            return Err("Couldn't get user from reaction".into());
+            return Err(anyhow!("Couldn't get user from reaction"));
         }
         Some(user_id) => user_id,
     };
@@ -326,7 +326,7 @@ pub(crate) async fn change_reaction_role(
                 .link(reaction.channel_id, reaction.guild_id),
             e
         );
-        return Err("Couldn't get user from reaction".into());
+        return Err(anyhow!("Couldn't get user from reaction"));
     }
 
     let role_id = RoleId::new(record.role_id as u64);
@@ -339,7 +339,7 @@ pub(crate) async fn change_reaction_role(
     if let Err(e) = change {
         let typ = if add { "add" } else { "remove" };
         error!("Couldn't {} role {}: {}", typ, record.role_id, e);
-        Err(format!("Couldn't {} role {} role", typ, role_id).into())
+        Err(anyhow!("Couldn't {} role {} role", typ, role_id))
     } else {
         Ok(())
     }

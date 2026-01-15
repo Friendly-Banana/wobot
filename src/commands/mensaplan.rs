@@ -247,7 +247,8 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
             .images(imgs)
             .height_limit(SCALING)
             .width_limit(SCALING)
-            .stitch()?;
+            .stitch()
+            .map_err(|e| anyhow!("Failed to stitch images: {}", e))?;
         let x = X_OFFSET + tile.0 as u32 * SCALING;
         let y = Y_OFFSET + tile.1 as u32 * SCALING;
         image.copy_from(&stitch, x, y)?;
@@ -259,7 +260,7 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
 
 fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     if position.len() < 2 || position.len() > 3 {
-        return Err(anyhow!("Bad position format, 2-3 characters").into());
+        return Err(anyhow!("Bad position format, 2-3 characters"));
     }
 
     let position = position.to_ascii_uppercase();
@@ -270,7 +271,7 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     } else if chars.last().unwrap().is_ascii_alphabetic() {
         chars.pop().unwrap()
     } else {
-        return Err(anyhow!("Bad position format, no letter").into());
+        return Err(anyhow!("Bad position format, no letter"));
     };
 
     let number = str::parse::<u8>(&chars.into_iter().collect::<String>())?;

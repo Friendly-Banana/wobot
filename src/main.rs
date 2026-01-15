@@ -129,7 +129,7 @@ pub(crate) struct Data {
     reaction_msgs: RwLock<HashSet<u64>>,
 }
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
+type Error = anyhow::Error;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[tokio::main]
@@ -160,6 +160,9 @@ async fn main() {
             event_handler: |ctx, event, _framework, data| {
                 Box::pin(handler::event_handler(ctx, event, _framework, data))
             },
+            on_error: |error| Box::pin(async move {
+                handler::on_error(error).await
+            }),
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some("!".to_string()),
                 edit_tracker: Some(Arc::from(EditTracker::for_timespan(Duration::from_secs(

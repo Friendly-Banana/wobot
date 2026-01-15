@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
 
+use anyhow::anyhow;
 use chrono::{DateTime, Datelike, Duration, Local, Timelike, Weekday};
 use chrono_tz::Tz;
 use itertools::Itertools;
@@ -209,7 +210,7 @@ async fn get_menu(
         .await?
         .into_iter()
         .find(|m| m.name.to_lowercase().contains(&canteen_id))
-        .ok_or("Canteen not found")?;
+        .ok_or_else(|| anyhow!("Canteen not found"))?;
 
     let day = next_week_day();
     let week = day.iso_week().week();
@@ -232,10 +233,10 @@ async fn get_menu(
         }
         Err(e) => {
             if e.status() == Some(StatusCode::NOT_FOUND) {
-                return Err("No menu found, maybe the mensa is closed?".into());
+                return Err(anyhow!("No menu found, maybe the mensa is closed?"));
             }
 
-            Err(format!("Menu fetching failed: {}", e).into())
+            Err(anyhow!("Menu fetching failed: {}", e))
         }
     }
 }

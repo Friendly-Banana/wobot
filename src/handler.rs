@@ -16,8 +16,34 @@ use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
 #[cfg(feature = "activity")]
 use tracing::warn;
+use tracing::error;
 
 static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\w+\b").unwrap());
+
+/// Error handler for all command and framework errors.
+/// Logs the full error chain to stdout and returns the topmost error to the user.
+pub(crate) async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            // Log the full error chain with all context
+            error!("Error in command '{}': {:?}", ctx.command().name, error);
+            
+            // Return topmost error message to the user
+            let error_message = format!("Error: {}", error);
+            let _ = ctx.say(error_message).await;
+        }
+        poise::FrameworkError::EventHandler { error, event, .. } => {
+            // Log the full error chain for event handlers
+            error!("Error in event handler for {:?}: {:?}", event.snake_case_name(), error);
+        }
+        error => {
+            // Log any other framework errors
+            if let Err(e) = poise::builtins::on_error(error).await {
+                error!("Error while handling error: {:?}", e);
+            }
+        }
+    }
+}
 
 pub(crate) async fn event_handler(
     ctx: &Context,
