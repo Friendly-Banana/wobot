@@ -279,7 +279,7 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     if (MIN_X..=MAX_X).contains(&letter) && (MIN_Y..=MAX_Y).contains(&number) {
         Ok((letter, number))
     } else {
-        Err(anyhow!("Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}").into())
+        Err(anyhow!("Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}"))
     }
 }
 
