@@ -26,7 +26,7 @@ COPY .sqlx ./.sqlx
 RUN cargo build --release --locked
 
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN <<EOF
 set -e
