@@ -1,14 +1,14 @@
 use ab_glyph::Font;
 use anyhow::Context as _;
-use image::codecs::png::PngEncoder;
 use image::DynamicImage;
+use image::codecs::png::PngEncoder;
 use imageproc::drawing::draw_text_mut;
 use poise::serenity_prelude::{CreateAttachment, CreateMessage, GetMessages, Message};
 use std::sync::OnceLock;
 use tracing::{debug, info};
 
 use crate::constants::{FONT, WHITE};
-use crate::{done, Context, Error};
+use crate::{Context, Error, done};
 
 const FONT_SIZE: f32 = 50.0;
 const OBAMA_PATH: &str = "assets/obama_medal.jpg";

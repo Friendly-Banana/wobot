@@ -1,4 +1,4 @@
-FROM rust:1.85.0-slim-bookworm AS builder
+FROM rust:1.92.0-slim-trixie AS builder
 
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -26,7 +26,7 @@ COPY .sqlx ./.sqlx
 RUN cargo build --release --locked
 
 
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 RUN <<EOF
 set -e

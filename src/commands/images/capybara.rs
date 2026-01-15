@@ -1,5 +1,5 @@
 use poise::serenity_prelude::CreateEmbed;
-use poise::{command, CreateReply};
+use poise::{CreateReply, command};
 use serde::Deserialize;
 
 use crate::constants::HTTP_CLIENT;

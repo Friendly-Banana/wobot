@@ -1,10 +1,10 @@
 use std::time::Duration;
 
+use poise::CreateReply;
 use poise::serenity_prelude::{
     ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton,
     CreateInteractionResponse, EditMessage,
 };
-use poise::CreateReply;
 
 use crate::{Context, Error};
 
@@ -17,11 +17,11 @@ pub(crate) async fn boop(ctx: Context<'_>) -> Result<(), Error> {
     let uuid_boop = ctx.id();
 
     let reply = {
-        let components = vec![CreateActionRow::Buttons(vec![CreateButton::new(
-            uuid_boop.to_string(),
-        )
-        .style(ButtonStyle::Primary)
-        .label("Boop me!")])];
+        let components = vec![CreateActionRow::Buttons(vec![
+            CreateButton::new(uuid_boop.to_string())
+                .style(ButtonStyle::Primary)
+                .label("Boop me!"),
+        ])];
 
         CreateReply::default()
             .content("I want some boops!")

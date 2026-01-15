@@ -1,8 +1,9 @@
 [package]
 name = "wobot"
 version = "1.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
+rust-version = "1.88"
 
 [features]
 default = ["activity"]

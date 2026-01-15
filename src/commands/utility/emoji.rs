@@ -2,17 +2,17 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use base64::Engine;
+use poise::CreateReply;
 use poise::serenity_prelude::{
     Attachment, ButtonStyle, ComponentInteractionCollector, CreateActionRow, CreateButton,
     CreateEmbed, EmojiIdentifier, Message, ReactionType,
 };
-use poise::CreateReply;
 use regex::Regex;
 use tracing::error;
 
 use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::constants::HTTP_CLIENT;
-use crate::{done, Context, Error};
+use crate::{Context, Error, done};
 
 const ADD_EMOJIS_TIMEOUT: Duration = Duration::from_secs(30);
 const EMOJI_URL: &str = "https://cdn.discordapp.com/emojis/";

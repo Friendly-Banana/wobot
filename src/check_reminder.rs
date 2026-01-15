@@ -3,7 +3,7 @@ use std::time::Duration;
 use poise::serenity_prelude::{
     ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, UserId,
 };
-use sqlx::{query, PgPool};
+use sqlx::{PgPool, query};
 use tokio::time::interval;
 use tracing::{debug, error, info};
 

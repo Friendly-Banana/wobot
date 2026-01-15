@@ -5,8 +5,8 @@ use poise::serenity_prelude::GuildId;
 use songbird::input::YoutubeDl;
 use songbird::tracks::TrackHandle;
 use songbird::{Event, EventContext, EventHandler as VoiceEventHandler, Songbird, TrackEvent};
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use tracing::error;
 
 #[poise::command(

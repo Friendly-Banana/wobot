@@ -1,5 +1,5 @@
 use crate::commands::load_bot_emojis;
-use crate::{done, Context, Error};
+use crate::{Context, Error, done};
 
 /// Test bot function, should respond with "pong!"
 #[poise::command(slash_command, prefix_command)]

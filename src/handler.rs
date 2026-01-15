@@ -1,19 +1,19 @@
-use crate::commands::{change_reaction_role, track_song};
-use crate::constants::HTTP_CLIENT;
 #[cfg(feature = "activity")]
 use crate::CacheEntry;
+use crate::commands::{change_reaction_role, track_song};
+use crate::constants::HTTP_CLIENT;
 use crate::{Data, Error};
 use itertools::Itertools;
+use poise::FrameworkContext;
 use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::*;
-use poise::FrameworkContext;
 use rand::random_bool;
 use regex::Regex;
 use songbird::input::File;
 use sqlx::query;
 use std::path::PathBuf;
-use std::sync::atomic::Ordering;
 use std::sync::LazyLock;
+use std::sync::atomic::Ordering;
 #[cfg(feature = "activity")]
 use tracing::warn;
 
@@ -193,11 +193,7 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(
             config
                 .counter
                 .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |val| {
-                    if val == 0 {
-                        Some(0)
-                    } else {
-                        Some(val - 1)
-                    }
+                    if val == 0 { Some(0) } else { Some(val - 1) }
                 });
         // not 0 now, still in cooldown
         if previous_value.unwrap() > 1 {

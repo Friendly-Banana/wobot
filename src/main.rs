@@ -21,7 +21,7 @@ use poise::serenity_prelude::{
 use poise::{EditTracker, Framework, PrefixFrameworkOptions};
 use serde::Deserialize;
 use songbird::serenity::SerenityInit;
-use sqlx::{query, PgPool};
+use sqlx::{PgPool, query};
 use tokio::sync::Mutex;
 use tracing::info;
 

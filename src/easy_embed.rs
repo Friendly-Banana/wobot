@@ -1,5 +1,5 @@
-use poise::serenity_prelude::{CreateEmbed, CreateInteractionResponseMessage, CreateMessage};
 use poise::CreateReply;
+use poise::serenity_prelude::{CreateEmbed, CreateInteractionResponseMessage, CreateMessage};
 
 pub(crate) trait EasyEmbed {
     fn easy_embed(self, e: CreateEmbed) -> Self;

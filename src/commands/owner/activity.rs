@@ -1,6 +1,6 @@
 use poise::serenity_prelude::ActivityData;
 
-use crate::{done, Context, Error};
+use crate::{Context, Error, done};
 
 #[derive(poise::ChoiceParameter, PartialEq)]
 pub(crate) enum ActivityChoice {

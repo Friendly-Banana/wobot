@@ -1,4 +1,4 @@
-use crate::{done, Context, Error};
+use crate::{Context, Error, done};
 use itertools::Itertools;
 use poise::serenity_prelude::{Emoji, GuildId, Message, ReactionType};
 use reqwest::Url;

@@ -1,7 +1,7 @@
 use crate::{Context, Error};
 use itertools::Itertools;
-use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
 use poise::CreateReply;
+use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
 use sqlx::{Column, Row};
 
 fn sql_value_to_string(row: &sqlx::postgres::PgRow, column_index: usize) -> String {
