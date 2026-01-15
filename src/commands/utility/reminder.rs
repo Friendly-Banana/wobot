@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use poise::CreateReply;
 use poise::serenity_prelude::model::timestamp;
 use poise::serenity_prelude::{CreateEmbed, FormattedTimestamp, Mentionable, User, UserId};
@@ -6,10 +6,10 @@ use sqlx::{query, query_as};
 use std::convert::identity;
 use timestamp::Timestamp;
 
-use crate::constants::TIMEZONE;
+use crate::commands::utils::parse_duration_or_date;
 use crate::{Context, Error};
 
-const DEFAULT_REMINDER_TIME: chrono::Duration = chrono::Duration::hours(1);
+const DEFAULT_REMINDER_TIME: Duration = Duration::hours(1);
 
 #[allow(dead_code)]
 pub(crate) struct Reminder {
@@ -29,22 +29,14 @@ pub(crate) async fn reminder(_: Context<'_>) -> Result<(), Error> {
 #[poise::command(slash_command, prefix_command)]
 pub(crate) async fn add(
     ctx: Context<'_>,
-    #[description = "date or duration"] when: Option<String>,
+    #[description = "date or duration, default 1 hour"] when: Option<String>,
     #[description = "The reminder message"] message: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
 
     let reminder_time = match when {
         None => Utc::now() + DEFAULT_REMINDER_TIME,
-        Some(x) => match parse_duration::parse(&x) {
-            Ok(duration) => Utc::now() + chrono::Duration::from_std(duration)?,
-            Err(_) => dateparser::parse_with(
-                &x,
-                &TIMEZONE,
-                chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap(),
-            )
-            .map_err(|e| format!("Is this a date or duration? {}", e))?,
-        },
+        Some(x) => parse_duration_or_date(Utc::now(), &x).await?,
     };
 
     let msg_id = ctx

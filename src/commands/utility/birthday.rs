@@ -1,8 +1,7 @@
-use crate::constants::TIMEZONE;
+use crate::commands::utils::parse_date;
 use crate::{Context, Error};
-use chrono::NaiveTime;
-use poise::serenity_prelude::model::timestamp;
 use poise::serenity_prelude::FormattedTimestamp;
+use poise::serenity_prelude::model::timestamp;
 use sqlx::query;
 use timestamp::Timestamp;
 
@@ -21,11 +20,10 @@ pub(crate) async fn birthday(_: Context<'_>) -> Result<(), Error> {
 pub(crate) async fn add(ctx: Context<'_>, date: String) -> Result<(), Error> {
     ctx.defer_ephemeral().await?;
 
-    let birthday =
-        dateparser::parse_with(&date, &TIMEZONE, NaiveTime::default())?.with_timezone(&TIMEZONE);
+    let birthday = parse_date(&date).await?;
     ctx.reply(format!(
         "Added your birthday at {}",
-        FormattedTimestamp::from(Timestamp::from(birthday))
+        FormattedTimestamp::from(Timestamp::from_unix_timestamp(birthday.timestamp())?)
     ))
     .await?;
 
