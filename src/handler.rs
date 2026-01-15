@@ -26,7 +26,7 @@ pub(crate) async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
     match error {
         poise::FrameworkError::Command { error, ctx, .. } => {
             // Log the full error chain with all context
-            error!("Error in command '{}': {:?}", ctx.command().name, error);
+            error!("Error in command '{}': {:?}", ctx.command().qualified_name, error);
             
             // Return topmost error message to the user
             let error_message = format!("Error: {}", error);

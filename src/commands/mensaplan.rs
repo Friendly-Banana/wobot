@@ -260,7 +260,7 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
 
 fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     if position.len() < 2 || position.len() > 3 {
-        return Err(anyhow!("Bad position format, 2-3 characters"));
+        return Err(anyhow!("Invalid position format. Expected 2-3 characters like \"A1\" or \"B12\""));
     }
 
     let position = position.to_ascii_uppercase();
@@ -271,7 +271,7 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     } else if chars.last().unwrap().is_ascii_alphabetic() {
         chars.pop().unwrap()
     } else {
-        return Err(anyhow!("Bad position format, no letter"));
+        return Err(anyhow!("Position must contain a letter (e.g., \"A1\", \"B12\")"));
     };
 
     let number = str::parse::<u8>(&chars.into_iter().collect::<String>())?;
@@ -279,7 +279,7 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     if (MIN_X..=MAX_X).contains(&letter) && (MIN_Y..=MAX_Y).contains(&number) {
         Ok((letter, number))
     } else {
-        Err(anyhow!("Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}"))
+        Err(anyhow!("Position out of bounds. Letters must be {MIN_X}-{MAX_X}, numbers must be {MIN_Y}-{MAX_Y}"))
     }
 }
 
