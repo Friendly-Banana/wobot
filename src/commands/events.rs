@@ -1,18 +1,16 @@
 use std::borrow::Cow;
-use std::ops::Add;
 
-use anyhow::Context as _;
-use chrono::{DateTime, Duration, NaiveTime, Utc};
-use dateparser::parse_with;
+use crate::commands::utils::{parse_date, parse_duration_or_date};
+use crate::{Context, Error, done};
+use chrono::Duration;
+use chrono::Utc;
 use ics::properties::{Description, DtEnd, DtStart, Location, Summary};
 use ics::{Event, ICalendar};
 use image::EncodableLayout;
 use poise::serenity_prelude::{
     CreateAttachment, CreateScheduledEvent, CreateThread, ScheduledEventType,
 };
-
-use crate::constants::TIMEZONE;
-use crate::{done, Context, Error};
+use std::ops::Add;
 
 const EVENT_URL: &str = "https://discord.com/events/";
 
@@ -66,7 +64,7 @@ pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
     done!(ctx);
 }
 
-/// Create a new meetup
+/// Create a new event, channel and announcement
 #[poise::command(
     slash_command,
     prefix_command,
@@ -78,19 +76,23 @@ pub(crate) async fn event(
     ctx: Context<'_>,
     name: String,
     location: String,
-    start: String,
-    #[description = "default start + 1 hour"] end: Option<String>,
+    #[description = "date(time) like today 5pm or 2024-12-31 18:00"] start: String,
+    #[description = "date(time) or duration, default start + 1 hour"] end: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let (start_date, end_date) = parse_start_and_end_date(start, end)?;
+    let start = parse_date(&start).await?;
+    let end = if let Some(datestr) = &end {
+        parse_duration_or_date(start, &datestr).await?
+    } else {
+        start + Duration::hours(1)
+    };
+
     let guild_id = ctx.guild_id().expect("guild_only");
+    let new_event = CreateScheduledEvent::new(ScheduledEventType::External, &name, start)
+        .location(location)
+        .end_time(end);
     let event = guild_id
-        .create_scheduled_event(
-            ctx.http(),
-            CreateScheduledEvent::new(ScheduledEventType::External, &name, start_date)
-                .location(location)
-                .end_time(end_date),
-        )
+        .create_scheduled_event(ctx.http(), new_event)
         .await?;
     let announcement = format!(
         "[{}]({}{}/{}) mit {}",
@@ -114,55 +116,5 @@ pub(crate) async fn event(
             thread.id.add_thread_member(ctx, ctx.author().id).await?;
             done!(ctx);
         }
-    }
-}
-
-fn parse_start_and_end_date(
-    start: String,
-    end: Option<String>,
-) -> Result<(DateTime<Utc>, DateTime<Utc>), Error> {
-    let time = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
-    let start_date = parse_with(&start, &TIMEZONE, time).context("Couldn't parse start time")?;
-    let end_date = match end {
-        None => start_date.add(Duration::hours(1)),
-        Some(input) => parse_with(&input, &TIMEZONE, time).context("Couldn't parse end time")?,
-    };
-    Ok((start_date, end_date))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::ops::Add;
-
-    use crate::constants::ONE_HOUR;
-
-    use super::parse_start_and_end_date;
-
-    #[test]
-    fn test_parse_dates() {
-        let (start, end) = parse_start_and_end_date("1970-01-01 00:00".to_string(), None).unwrap();
-        assert_eq!(start.add(ONE_HOUR), end);
-
-        let (start, end) = parse_start_and_end_date(
-            "2012-12-31 12:34".to_string(),
-            Some("2013-01-01 21:43".to_string()),
-        )
-        .unwrap();
-        assert_eq!(start.timestamp(), 1356953640);
-        assert_eq!(end.timestamp(), 1357072980);
-    }
-
-    #[test]
-    fn test_reject_invalid_dates() {
-        assert!(parse_start_and_end_date("".to_string(), None).is_err());
-        assert!(
-            parse_start_and_end_date("1970-01-01 00:00".to_string(), Some("".to_string())).is_err()
-        );
-        assert!(parse_start_and_end_date("not a date".to_string(), None).is_err());
-        assert!(parse_start_and_end_date(
-            "1970-01-01 00:00".to_string(),
-            Some("not a date".to_string()),
-        )
-        .is_err());
     }
 }

@@ -440,10 +440,8 @@ checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
- "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
  "windows-link",
 ]
 
@@ -748,17 +746,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2330da5de22e8a3cb63252ce2abb30116bf5265e89c0e01bc17015ce30a476"
 
 [[package]]
-name = "dateparser"
-version = "0.2.1"
-source = "git+https://github.com/RiediJohannes/dateparser#fa7f98dc634aa4f673e19d83ab078377f68ec623"
-dependencies = [
- "anyhow",
- "chrono",
- "lazy_static",
- "regex",
-]
-
-[[package]]
 name = "der"
 version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1036,6 +1023,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99f31122ab0445ff8cee420b805f24e07683073815de1dd276ee7d588d301700"
 dependencies = [
  "hashmap_derive",
+]
+
+[[package]]
+name = "fundu"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ce12752fc64f35be3d53e0a57017cd30970f0cffd73f62c791837d8845badbd"
+dependencies = [
+ "fundu-core",
+]
+
+[[package]]
+name = "fundu-core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e463452e2d8b7600d38dcea1ed819773a57f0d710691bfc78db3961bd3f4c3ba"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]
@@ -5685,8 +5690,8 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "chrono-tz",
- "dateparser",
  "deser-hjson",
+ "fundu",
  "ics",
  "image",
  "imageproc",
