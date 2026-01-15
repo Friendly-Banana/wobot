@@ -47,10 +47,10 @@ pub(crate) async fn event_handler(
         }
         FullEvent::ReactionAdd { add_reaction } => {
             #[cfg(feature = "activity")]
-            if let Some(guild) = add_reaction.guild_id {
-                if let Some(user) = add_reaction.user_id {
-                    update_activity(data, guild, user).await;
-                }
+            if let Some(guild) = add_reaction.guild_id
+                && let Some(user) = add_reaction.user_id
+            {
+                update_activity(data, guild, user).await;
             }
             change_reaction_role(ctx, data, add_reaction, true).await
         }
@@ -100,16 +100,16 @@ async fn update_message_count(data: &Data, guild: GuildId, user: UserId) {
 
 #[cfg(feature = "activity")]
 async fn update_activity(data: &Data, guild: GuildId, user: UserId) {
-    if let Some(guild_activity) = data.activity_per_guild.get(&guild) {
-        if guild_activity.get(&user).is_none() {
-            let result = query!("INSERT INTO activity (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id, guild_id) DO UPDATE SET last_active = now()", user.get() as i64, guild.get() as i64)
+    if let Some(guild_activity) = data.activity_per_guild.get(&guild)
+        && guild_activity.get(&user).is_none()
+    {
+        let result = query!("INSERT INTO activity (user_id, guild_id) VALUES ($1, $2) ON CONFLICT (user_id, guild_id) DO UPDATE SET last_active = now()", user.get() as i64, guild.get() as i64)
                 .execute(&data.database)
                 .await;
-            if let Err(e) = result {
-                warn!("Failed to update activity for {}: {}", user.get(), e);
-            } else {
-                guild_activity.insert(user, CacheEntry {});
-            }
+        if let Err(e) = result {
+            warn!("Failed to update activity for {}: {}", user.get(), e);
+        } else {
+            guild_activity.insert(user, CacheEntry {});
         }
     }
 }
