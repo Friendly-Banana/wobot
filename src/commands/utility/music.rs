@@ -125,10 +125,10 @@ impl VoiceEventHandler for SongEndNotifier {
     async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
         if let EventContext::Track(track_list) = ctx {
             // this track is not yet removed
-            if track_list.len() <= 1 {
-                if let Err(e) = self.manager.remove(self.guild).await {
-                    error!("Failed to leave channel: {:?}", e);
-                }
+            if track_list.len() <= 1
+                && let Err(e) = self.manager.remove(self.guild).await
+            {
+                error!("Failed to leave channel: {:?}", e);
             }
         }
         None

@@ -36,10 +36,10 @@ pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
         if let Some(description) = event.description {
             ics_event.push(Description::new(description));
         }
-        if let Some(metadata) = event.metadata {
-            if let Some(loc) = metadata.location {
-                ics_event.push(Location::new(loc));
-            }
+        if let Some(metadata) = event.metadata
+            && let Some(loc) = metadata.location
+        {
+            ics_event.push(Location::new(loc));
         }
         ics_event.push(DtStart::new(
             event.start_time.format(ICS_TIME_FORMAT).to_string(),
@@ -82,7 +82,7 @@ pub(crate) async fn event(
     ctx.defer().await?;
     let start = parse_date(&start).await?;
     let end = if let Some(datestr) = &end {
-        parse_duration_or_date(start, &datestr).await?
+        parse_duration_or_date(start, datestr).await?
     } else {
         start + Duration::hours(1)
     };

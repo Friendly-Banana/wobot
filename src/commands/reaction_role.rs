@@ -79,19 +79,18 @@ async fn add_reaction_role(
         return Ok(());
     }
 
-    if let ReactionType::Custom { id, .. } = reaction {
-        if ctx
+    if let ReactionType::Custom { id, .. } = reaction
+        && ctx
             .guild_id()
             .expect("guild_only")
             .emoji(ctx.http(), id)
             .await
             .is_err()
-        {
-            debug!("Couldn't find emoji, make sure it's from this guild");
-            ctx.say("Couldn't find emoji, make sure it's from this guild")
-                .await?;
-            return Ok(());
-        }
+    {
+        debug!("Couldn't find emoji, make sure it's from this guild");
+        ctx.say("Couldn't find emoji, make sure it's from this guild")
+            .await?;
+        return Ok(());
     }
 
     let role = roles.remove(&role_id).expect("role exists");
