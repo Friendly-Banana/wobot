@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 
-use anyhow::{anyhow, Context as _};
+use anyhow::{Context as _, anyhow};
 use image::{DynamicImage, GenericImage};
 use itertools::Itertools;
 use mini_moka::sync::Cache;

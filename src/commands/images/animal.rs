@@ -1,9 +1,9 @@
 use std::ops::Range;
 
 use poise::serenity_prelude::CreateEmbed;
-use poise::{command, CreateReply};
+use poise::{CreateReply, command};
 #[cfg(not(test))]
-use rand::{rng, Rng};
+use rand::{Rng, rng};
 use serde::Deserialize;
 
 use crate::constants::HTTP_CLIENT;
@@ -102,7 +102,7 @@ mod tests {
     use std::sync::atomic::AtomicI32;
     use std::sync::atomic::Ordering::SeqCst;
 
-    use super::{get_random_image, API_RANGE};
+    use super::{API_RANGE, get_random_image};
 
     pub(crate) static API_CHOICE: AtomicI32 = AtomicI32::new(0);
 

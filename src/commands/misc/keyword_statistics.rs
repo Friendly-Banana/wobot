@@ -1,6 +1,6 @@
 use anyhow::Context as _;
-use poise::serenity_prelude::{CreateEmbed, CreateEmbedFooter, UserId};
 use poise::CreateReply;
+use poise::serenity_prelude::{CreateEmbed, CreateEmbedFooter, UserId};
 use sqlx::query;
 
 use crate::{Context, Error};

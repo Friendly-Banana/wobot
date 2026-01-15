@@ -1,10 +1,10 @@
-use crate::{done, Context, Data, Error};
+use crate::{Context, Data, Error, done};
 use anyhow::Context as _;
 use poise::serenity_prelude::{
-    CacheHttp, ChannelId, EmojiId, GuildId, Mentionable, Message, MessageId, Reaction,
-    ReactionCollector, ReactionType, RoleId, MESSAGE_CODE_LIMIT,
+    CacheHttp, ChannelId, EmojiId, GuildId, MESSAGE_CODE_LIMIT, Mentionable, Message, MessageId,
+    Reaction, ReactionCollector, ReactionType, RoleId,
 };
-use poise::{serenity_prelude, CreateReply};
+use poise::{CreateReply, serenity_prelude};
 use sqlx::{query, query_as};
 use std::collections::VecDeque;
 use std::time::Duration;

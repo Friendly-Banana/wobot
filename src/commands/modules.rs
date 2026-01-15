@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use poise::builtins::register_in_guild;
 use poise::{ChoiceParameter, Command};
-use sqlx::{query, PgPool};
+use sqlx::{PgPool, query};
 
 use crate::commands::*;
 use crate::{Context, Data, Error};

@@ -1,13 +1,13 @@
 use chrono::{Duration, Utc};
 use itertools::Itertools;
 use poise::serenity_prelude::{ChannelId, Context, CreateMessage, GuildId, Mentionable, UserId};
-use sqlx::{query, PgPool};
+use sqlx::{PgPool, query};
 use std::collections::HashMap;
-use tokio::time::{interval_at, Instant};
+use tokio::time::{Instant, interval_at};
 use tracing::{debug, error, info};
 
-use crate::constants::{ONE_DAY, TIMEZONE};
 use crate::Error;
+use crate::constants::{ONE_DAY, TIMEZONE};
 
 pub(crate) fn check_birthdays(
     ctx: Context,
