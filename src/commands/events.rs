@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use crate::commands::utils::{parse_date, parse_duration_or_date};
-use crate::{Context, Error, done};
+use crate::{Context, done};
 use chrono::Duration;
 use chrono::Utc;
 use ics::properties::{Description, DtEnd, DtStart, Location, Summary};
@@ -16,7 +16,7 @@ const EVENT_URL: &str = "https://discord.com/events/";
 
 /// Export all events on this server as an ICS calendar file
 #[poise::command(slash_command, prefix_command, guild_only)]
-pub(crate) async fn export_events(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn export_events(ctx: Context<'_>) -> anyhow::Result<()> {
     const ICS_TIME_FORMAT: &str = "%Y%m%dT%H%M%SZ";
 
     ctx.defer().await?;
@@ -78,11 +78,11 @@ pub(crate) async fn event(
     location: String,
     #[description = "date(time) like today 5pm or 2024-12-31 18:00"] start: String,
     #[description = "date(time) or duration, default start + 1 hour"] end: Option<String>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
     let start = parse_date(&start).await?;
-    let end = if let Some(datestr) = &end {
-        parse_duration_or_date(start, datestr).await?
+    let end = if let Some(date_str) = &end {
+        parse_duration_or_date(start, date_str).await?
     } else {
         start + Duration::hours(1)
     };

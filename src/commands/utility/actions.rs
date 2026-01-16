@@ -1,4 +1,4 @@
-use crate::{Context, Error, done};
+use crate::{Context, done};
 use itertools::Itertools;
 use poise::serenity_prelude::{Emoji, GuildId, Message, ReactionType};
 use reqwest::Url;
@@ -8,7 +8,7 @@ use tracing::info;
 
 /// Create embeds and remove tracking parameters from URLs
 #[poise::command(slash_command, prefix_command, track_edits)]
-pub(crate) async fn embed(ctx: Context<'_>, mut url: Url) -> Result<(), Error> {
+pub(crate) async fn embed(ctx: Context<'_>, mut url: Url) -> anyhow::Result<()> {
     if let Some(mut host) = url.host_str() {
         if let Some(stripped) = host.strip_prefix("www.") {
             host = stripped;
@@ -36,7 +36,7 @@ static EMOJI_CACHE: LazyLock<RwLock<Vec<Emoji>>> = LazyLock::new(|| RwLock::new(
 pub(crate) async fn load_bot_emojis(
     ctx: &poise::serenity_prelude::Context,
     guilds: Vec<GuildId>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let mut emojis = ctx.get_application_emojis().await?;
     for guild in guilds {
         let mut guild_emojis = guild.emojis(ctx).await?;
@@ -80,7 +80,7 @@ pub(crate) async fn say(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_emoji_in_text"] text: String,
     message: Option<Message>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     if let Some(message) = message {
         message.reply(ctx, text).await?;
         done!(ctx);
@@ -96,7 +96,7 @@ pub(crate) async fn react(
     ctx: Context<'_>,
     #[autocomplete = "autocomplete_emoji"] emoji: ReactionType,
     message: Message,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     message.react(ctx.http(), emoji).await?;
     done!(ctx);

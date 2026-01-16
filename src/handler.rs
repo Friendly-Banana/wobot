@@ -2,11 +2,11 @@
 use crate::CacheEntry;
 use crate::commands::{change_reaction_role, track_song};
 use crate::constants::HTTP_CLIENT;
-use crate::{Data, Error};
+use crate::{Data, UserError};
 use itertools::Itertools;
-use poise::FrameworkContext;
 use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::*;
+use poise::{CreateReply, FrameworkContext};
 use rand::random_bool;
 use regex::Regex;
 use songbird::input::File;
@@ -14,6 +14,7 @@ use sqlx::query;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
+use tracing::error;
 #[cfg(feature = "activity")]
 use tracing::warn;
 
@@ -22,9 +23,9 @@ static WORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b\w+\b").unw
 pub(crate) async fn event_handler(
     ctx: &Context,
     event: &FullEvent,
-    _framework: FrameworkContext<'_, Data, Error>,
+    _framework: FrameworkContext<'_, Data, anyhow::Error>,
     data: &Data,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     match event {
         FullEvent::VoiceStateUpdate { new, old } => {
             if let Some(guild) = new.guild_id {
@@ -119,7 +120,7 @@ async fn auto_reply(
     data: &Data,
     new_message: &Message,
     content: &str,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let matches = data
         .auto_replies
         .iter()
@@ -173,7 +174,7 @@ async fn auto_react(
     data: &Data,
     new_message: &Message,
     content: &str,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let words = WORD_REGEX
         .find_iter(content)
         .map(|mat| mat.as_str())
@@ -186,7 +187,7 @@ async fn auto_react(
     Ok(())
 }
 
-async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(), Error> {
+async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> anyhow::Result<()> {
     if let Some(config) = data.celery.get(&channel) {
         // saturating subtraction
         let previous_value =
@@ -241,4 +242,49 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> Result<(
     }
 
     Ok(())
+}
+
+pub(crate) async fn on_error(poise_error: poise::FrameworkError<'_, Data, anyhow::Error>) {
+    match poise_error {
+        poise::FrameworkError::Command { error, ctx, .. } => match error.downcast::<UserError>() {
+            Ok(err) => {
+                if let Err(e) = ctx.say(err.message).await {
+                    error!("Error while sending error message: {}", e);
+                }
+            }
+            Err(err) => {
+                error!(
+                    "Error in command '{}': {:?}",
+                    ctx.command().qualified_name,
+                    err
+                );
+
+                let embed = CreateEmbed::new()
+                    .colour(Colour::RED)
+                    .title("WoBot has run into an error")
+                    .description(format!("{}", err))
+                    .footer(CreateEmbedFooter::new(
+                        "It has been logged and will be looked into.",
+                    ));
+                if let Err(e) = ctx
+                    .send(CreateReply::default().ephemeral(true).embed(embed))
+                    .await
+                {
+                    error!("Error while sending error message: {}", e);
+                }
+            }
+        },
+        poise::FrameworkError::EventHandler { error, event, .. } => {
+            error!(
+                "Error in event handler for {:?}: {:?}",
+                event.snake_case_name(),
+                error
+            );
+        }
+        _ => {
+            if let Err(e) = poise::builtins::on_error(poise_error).await {
+                error!("Error while handling error with builtin handler: {}", e);
+            }
+        }
+    }
 }

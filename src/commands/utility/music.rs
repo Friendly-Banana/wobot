@@ -1,5 +1,6 @@
 use crate::constants::HTTP_CLIENT;
-use crate::{Context, Error};
+use crate::{Context, UserError};
+use anyhow::Context as _;
 use poise::async_trait;
 use poise::serenity_prelude::GuildId;
 use songbird::input::YoutubeDl;
@@ -15,29 +16,32 @@ use tracing::error;
     guild_only,
     subcommands("volume", "play", "stop", "skip")
 )]
-pub(crate) async fn music(_: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn music(_: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 static VOLUME: AtomicU8 = AtomicU8::new(50);
 
+async fn get_manager(ctx: &Context<'_>) -> Arc<Songbird> {
+    songbird::get(ctx.serenity_context())
+        .await
+        .expect("Songbird initialized")
+        .clone()
+}
+
 #[poise::command(slash_command, prefix_command)]
-async fn volume(ctx: Context<'_>, #[description = "percent"] volume: u8) -> Result<(), Error> {
+async fn volume(ctx: Context<'_>, #[description = "percent"] volume: u8) -> anyhow::Result<()> {
     if volume == 0 || volume > 200 {
-        return Err("Volume must be between 1 and 200".into());
+        return Err(UserError::err("Volume must be between 1 and 200"));
     }
     ctx.defer().await?;
     VOLUME.store(volume, Ordering::Relaxed);
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird initialized")
-        .clone();
-    let handler_lock = match manager.get(ctx.guild_id().expect("guild_only")) {
-        Some(handler) => handler,
-        None => {
-            return Err("Not in a voice channel".into());
-        }
+
+    let manager = get_manager(&ctx).await;
+    let Some(handler_lock) = manager.get(ctx.guild_id().expect("guild_only")) else {
+        return Err(UserError::err("Please join a voice channel first"));
     };
+
     let handler = handler_lock.lock().await;
     if let Some(track) = handler.queue().current() {
         track.set_volume(volume as f32 / 100.0)?;
@@ -47,33 +51,24 @@ async fn volume(ctx: Context<'_>, #[description = "percent"] volume: u8) -> Resu
 }
 
 #[poise::command(slash_command, prefix_command)]
-async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
+async fn play(ctx: Context<'_>, url: String) -> anyhow::Result<()> {
     ctx.defer().await?;
-    let channel = ctx
+
+    let Some(channel) = ctx
         .guild()
         .expect("guild in cache")
         .voice_states
         .get(&ctx.author().id)
-        .and_then(|vs| vs.channel_id);
-    if channel.is_none() {
-        return Err("Please join a voice channel first".into());
-    }
-
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird initialized")
-        .clone();
-
-    let handler_lock = match manager
-        .join(ctx.guild_id().expect("guild_only"), channel.unwrap())
-        .await
-    {
-        Ok(handler) => handler,
-        Err(e) => {
-            error!("Failed to join voice channel: {:?}", e);
-            return Err("Failed to join voice channel".into());
-        }
+        .and_then(|vs| vs.channel_id)
+    else {
+        return Err(UserError::err("Please join a voice channel first"));
     };
+
+    let manager = get_manager(&ctx).await;
+    let handler_lock = manager
+        .join(ctx.guild_id().expect("guild_only"), channel)
+        .await
+        .context("Failed to join voice channel")?;
 
     let mut handler = handler_lock.lock().await;
     let src = YoutubeDl::new(HTTP_CLIENT.clone(), url);
@@ -85,29 +80,20 @@ async fn play(ctx: Context<'_>, url: String) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command)]
-async fn stop(ctx: Context<'_>) -> Result<(), Error> {
+async fn stop(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird initialized")
-        .clone();
+    let manager = get_manager(&ctx).await;
     manager.remove(ctx.guild_id().expect("guild_only")).await?;
     ctx.reply("See you next time").await?;
     Ok(())
 }
 
 #[poise::command(slash_command, prefix_command)]
-async fn skip(ctx: Context<'_>) -> Result<(), Error> {
+async fn skip(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
-    let manager = songbird::get(ctx.serenity_context())
-        .await
-        .expect("Songbird initialized")
-        .clone();
-    let handler_lock = match manager.get(ctx.guild_id().expect("guild_only")) {
-        Some(handler) => handler,
-        None => {
-            return Err("Not in a voice channel".into());
-        }
+    let manager = get_manager(&ctx).await;
+    let Some(handler_lock) = manager.get(ctx.guild_id().expect("guild_only")) else {
+        return Err(UserError::err("Please join a voice channel first"));
     };
     let handler = handler_lock.lock().await;
     handler.queue().skip()?;
@@ -139,7 +125,7 @@ pub(crate) fn track_song(
     manager: Arc<Songbird>,
     guild: GuildId,
     song: TrackHandle,
-) -> Result<(), Error> {
+) -> Result<(), anyhow::Error> {
     song.set_volume(VOLUME.load(Ordering::Relaxed) as f32 / 100.0)?;
     song.add_event(
         Event::Track(TrackEvent::End),

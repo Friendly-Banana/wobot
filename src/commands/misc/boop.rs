@@ -6,14 +6,14 @@ use poise::serenity_prelude::{
     CreateInteractionResponse, EditMessage,
 };
 
-use crate::{Context, Error};
+use crate::Context;
 
 const BOOP_TIMEOUT: Duration = Duration::from_secs(10);
 
 // Adopted from https://github.com/serenity-rs/poise/blob/ec19915d817cc6ad8f02ec0cab260d29d2704cce/examples/feature_showcase/collector.rs
 /// Boop the bot!
 #[poise::command(slash_command, prefix_command, track_edits)]
-pub(crate) async fn boop(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn boop(ctx: Context<'_>) -> anyhow::Result<()> {
     let uuid_boop = ctx.id();
 
     let reply = {

@@ -5,15 +5,15 @@ use image::{DynamicImage, GenericImage};
 use poise::serenity_prelude::User;
 use tracing::{debug, info};
 
+use crate::Context;
 use crate::commands::utils::{get_avatar_url, load_avatar, send_image};
-use crate::{Context, Error};
 
 const CUTIE_PIE_PATH: &str = "assets/cutie_pie.png";
 static CUTIE_PIE_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
 
 /// Create a cutie pie meme with someone's avatar
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn cutie_pie(ctx: Context<'_>, user: User) -> Result<(), Error> {
+pub(crate) async fn cutie_pie(ctx: Context<'_>, user: User) -> anyhow::Result<()> {
     ctx.defer().await?;
     let avatar = load_avatar(get_avatar_url(&ctx, &user).await?).await?;
 
@@ -22,7 +22,7 @@ pub(crate) async fn cutie_pie(ctx: Context<'_>, user: User) -> Result<(), Error>
         image::open(CUTIE_PIE_PATH).expect("Failed to load cutie pie image")
     });
 
-    let mut img = CUTIE_PIE_IMAGE.get().context("OBAMA_IMAGE loaded")?.clone();
+    let mut img = CUTIE_PIE_IMAGE.get().unwrap().clone();
     img.copy_from(&avatar, 354, 336)
         .context("Failed to copy avatar")?;
 

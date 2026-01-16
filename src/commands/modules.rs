@@ -4,7 +4,7 @@ use poise::{ChoiceParameter, Command};
 use sqlx::{PgPool, query};
 
 use crate::commands::*;
-use crate::{Context, Data, Error};
+use crate::{Context, Data};
 
 #[derive(Clone, poise::ChoiceParameter)]
 pub(crate) enum Module {
@@ -41,16 +41,16 @@ impl From<i32> for Module {
     guild_only,
     subcommands("list", "enable", "disable")
 )]
-pub(crate) async fn modules(_ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn modules(_ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let modules = get_active_modules(&ctx.data().database, ctx.guild_id().unwrap()).await?;
     ctx.reply(format!(
-        "Aktive Modules: {}",
+        "Active modules: {}",
         modules.iter().map(Module::name).join(", ")
     ))
     .await?;
@@ -58,7 +58,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command, owners_only)]
-pub(crate) async fn enable(ctx: Context<'_>, module: Module) -> Result<(), Error> {
+pub(crate) async fn enable(ctx: Context<'_>, module: Module) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().unwrap();
 
@@ -78,7 +78,7 @@ pub(crate) async fn enable(ctx: Context<'_>, module: Module) -> Result<(), Error
 }
 
 #[poise::command(slash_command, prefix_command, owners_only)]
-pub(crate) async fn disable(ctx: Context<'_>, module: Module) -> Result<(), Error> {
+pub(crate) async fn disable(ctx: Context<'_>, module: Module) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().unwrap();
 
@@ -100,7 +100,7 @@ pub(crate) async fn disable(ctx: Context<'_>, module: Module) -> Result<(), Erro
 pub(crate) async fn get_active_modules(
     database: &PgPool,
     guild: GuildId,
-) -> Result<Vec<Module>, Error> {
+) -> anyhow::Result<Vec<Module>> {
     let modules = query!(
         "SELECT * FROM modules WHERE guild_id = $1",
         guild.get() as i64
@@ -111,7 +111,7 @@ pub(crate) async fn get_active_modules(
     Ok(modules.iter().map(|m| Module::from(m.module_id)).collect())
 }
 
-pub(crate) fn get_all_commands() -> Vec<Command<Data, Error>> {
+pub(crate) fn get_all_commands() -> Vec<Command<Data, anyhow::Error>> {
     let mut cmds = get_active_commands(vec![
         Module::Canteen,
         Module::Images,
@@ -125,7 +125,7 @@ pub(crate) fn get_all_commands() -> Vec<Command<Data, Error>> {
     cmds
 }
 
-pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, Error>> {
+pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, anyhow::Error>> {
     let mut commands = Vec::new();
     for module in modules {
         commands.extend(match module {

@@ -1,13 +1,11 @@
+use crate::constants::{ONE_DAY, TIMEZONE};
 use chrono::{Duration, Utc};
 use itertools::Itertools;
 use poise::serenity_prelude::{ChannelId, Context, CreateMessage, GuildId, Mentionable, UserId};
 use sqlx::{PgPool, query};
 use std::collections::HashMap;
 use tokio::time::{Instant, interval_at};
-use tracing::{debug, error, info};
-
-use crate::Error;
-use crate::constants::{ONE_DAY, TIMEZONE};
+use tracing::{Level, debug, error, info, span, trace};
 
 pub(crate) fn check_birthdays(
     ctx: Context,
@@ -15,8 +13,8 @@ pub(crate) fn check_birthdays(
     event_channel: HashMap<GuildId, ChannelId>,
 ) {
     tokio::spawn(async move {
-        if let Err(why) = birthday(&ctx, &database, &event_channel).await {
-            error!("Failed checking birthdays: {}", why);
+        if let Err(err) = send_birthdays(&ctx, &database, &event_channel).await {
+            error!(error = ?err, "Failed checking birthdays");
         }
 
         // run shortly after midnight
@@ -31,30 +29,31 @@ pub(crate) fn check_birthdays(
         loop {
             interval.tick().await;
 
-            if let Err(why) = birthday(&ctx, &database, &event_channel).await {
-                error!("Failed checking birthdays: {}", why);
+            if let Err(err) = send_birthdays(&ctx, &database, &event_channel).await {
+                error!(error = ?err, "Failed checking birthdays");
             }
         }
     });
     info!("Started birthday thread");
 }
 
-async fn birthday(
+async fn send_birthdays(
     ctx: &Context,
     database: &PgPool,
     event_channel: &HashMap<GuildId, ChannelId>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
+    let _ = span!(Level::DEBUG, "Sending birthday wishes").enter();
     let due = query!(
         "UPDATE birthdays SET last_congratulated = current_date WHERE birthday + ((DATE_PART('year', current_date) - DATE_PART('year', birthday)) || ' years')::interval = current_date AND (last_congratulated IS NULL OR last_congratulated < current_date) RETURNING guild_id, user_id"
     )
         .fetch_all(database)
         .await?;
+    debug!(?due, "Fetched due wishes");
 
-    debug!("Sending {} congratulations...", due.len());
     let mut guild_users: HashMap<GuildId, Vec<UserId>> = HashMap::new();
-    for congrat in due {
-        let guild_id = GuildId::new(congrat.guild_id as u64);
-        let user_id = UserId::new(congrat.user_id as u64);
+    for congrats in due {
+        let guild_id = GuildId::new(congrats.guild_id as u64);
+        let user_id = UserId::new(congrats.user_id as u64);
         guild_users.entry(guild_id).or_default().push(user_id);
     }
 
@@ -72,7 +71,7 @@ async fn birthday(
         if let Some(channel) = event_channel.get(&guild_id) {
             channel.send_message(ctx, message).await?;
         }
+        trace!(users = ?users,guild = ?guild_id, "Sent congrats");
     }
-    debug!("Sent all congratulations");
     Ok(())
 }

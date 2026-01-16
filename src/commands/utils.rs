@@ -1,9 +1,7 @@
 use crate::constants::{HTTP_CLIENT, ONE_DAY};
-use crate::{Context, Error};
+use crate::{Context, UserError};
 use anyhow::Context as _;
-use chrono::{DateTime, Duration, Utc};
-use fundu::DurationParser;
-use fundu::TimeUnit::{Day, Hour, Minute, Month, Week, Year};
+use chrono::{DateTime, Utc};
 use image::DynamicImage;
 use image::codecs::png::PngEncoder;
 use mini_moka::sync::Cache;
@@ -48,7 +46,7 @@ static AVATAR_CACHE: LazyLock<Cache<String, DynamicImage>> = LazyLock::new(|| {
         .build()
 });
 
-pub(crate) async fn load_avatar(avatar_url: String) -> Result<DynamicImage, Error> {
+pub(crate) async fn load_avatar(avatar_url: String) -> anyhow::Result<DynamicImage> {
     if let Some(avatar) = AVATAR_CACHE.get(&avatar_url) {
         return Ok(avatar);
     }
@@ -61,7 +59,7 @@ pub(crate) async fn load_avatar(avatar_url: String) -> Result<DynamicImage, Erro
     Ok(avatar)
 }
 
-pub(crate) async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> Result<String, Error> {
+pub(crate) async fn get_avatar_url(ctx: &Context<'_>, user: &User) -> anyhow::Result<String> {
     let partial_guild = ctx.partial_guild().await;
     if let Some(guild) = partial_guild {
         let member = guild.member(&ctx, user.id).await?;
@@ -89,7 +87,7 @@ pub(crate) async fn remove_components_but_keep_embeds(
     ctx: Context<'_>,
     mut m: CreateReply,
     reply: ReplyHandle<'_>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let original = reply.message().await?;
     m = m.components(Vec::new());
     m.embeds = original
@@ -106,7 +104,7 @@ pub async fn send_image(
     ctx: Context<'_>,
     img: DynamicImage,
     filename: String,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let mut output_bytes: Vec<u8> = Vec::new();
     img.write_with_encoder(PngEncoder::new(&mut output_bytes))?;
 
@@ -115,16 +113,8 @@ pub async fn send_image(
     Ok(())
 }
 
-pub const DURATION_PARSER: DurationParser = DurationParser::builder()
-    .disable_infinity()
-    .default_unit(Hour)
-    .allow_time_unit_delimiter()
-    .parse_multiple(Some(&[]))
-    .time_units(&[Minute, Hour, Day, Week, Month, Year])
-    .build();
-
 /// Parse a date/datetime string using the `date` command with Europe/Berlin timezone
-pub async fn parse_date(date: &str) -> Result<DateTime<Utc>, Error> {
+pub async fn parse_date(date: &str) -> anyhow::Result<DateTime<Utc>> {
     let output = Command::new("date")
         .arg("--rfc-3339=seconds")
         .arg("--date")
@@ -134,11 +124,10 @@ pub async fn parse_date(date: &str) -> Result<DateTime<Utc>, Error> {
         .context("Failed to execute date command")?;
 
     if !output.status.success() {
-        return Err(anyhow::anyhow!(
+        return Err(UserError::err(format!(
             "Date command failed: {}",
             String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
+        )));
     }
 
     let output_str = String::from_utf8(output.stdout).context("date output is invalid UTF-8")?;
@@ -148,26 +137,31 @@ pub async fn parse_date(date: &str) -> Result<DateTime<Utc>, Error> {
     Ok(date)
 }
 
-/// Parse a date or duration string (e.g., "2h", "1d")
 /// If the input is a duration, it's added to the current date/time
 pub async fn parse_duration_or_date(
     current: DateTime<Utc>,
     add: &str,
-) -> Result<DateTime<Utc>, Error> {
-    let result = DURATION_PARSER.parse(add);
-    if let Ok(dur) = result {
-        let chrono_dur: Duration = dur.try_into()?;
-        return Ok(current + chrono_dur);
+) -> anyhow::Result<DateTime<Utc>> {
+    let dur_result = parse_duration::parse(add);
+    if let Ok(dur) = dur_result {
+        return Ok(current + dur);
     }
-
-    parse_date(add).await
+    let date_result = parse_date(add).await;
+    if let Ok(date) = date_result {
+        return Ok(date);
+    }
+    Err(UserError::err(format!(
+        "Not a date or duration: {}, {}",
+        date_result.unwrap_err(),
+        dur_result.unwrap_err()
+    )))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::constants::TIMEZONE;
-    use chrono::{NaiveDate, TimeZone};
+    use chrono::{Duration, NaiveDate, TimeZone};
 
     const NOW: DateTime<Utc> = DateTime::from_timestamp(1, 0).unwrap();
 
@@ -193,8 +187,8 @@ mod tests {
         assert!(parse_date("not a date").await.is_err());
     }
 
-    const YEAR: i64 = 60 * 60 * 24 * 365 + 60 * 60 * 24 / 4;
-    const MONTH: i64 = YEAR / 12;
+    const YEAR: Duration = Duration::seconds(31_556_952);
+    const MONTH: Duration = Duration::seconds(2_629_746);
 
     #[tokio::test]
     async fn test_valid_duration() {
@@ -206,8 +200,8 @@ mod tests {
             .unwrap();
         assert_eq!(
             duration,
-            NOW + Duration::seconds(YEAR)
-                + Duration::seconds(MONTH) * 2
+            NOW + YEAR
+                + MONTH * 2
                 + Duration::days(7) * 3
                 + Duration::days(4)
                 + Duration::hours(5)

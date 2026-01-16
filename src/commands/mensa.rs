@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::ops::{Add, AddAssign};
-
+use anyhow::{Context as _, anyhow, bail};
 use chrono::{DateTime, Datelike, Duration, Local, Timelike, Weekday};
 use chrono_tz::Tz;
 use itertools::Itertools;
@@ -9,11 +7,13 @@ use poise::CreateReply;
 use poise::serenity_prelude::CreateEmbed;
 use reqwest::StatusCode;
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::ops::{Add, AddAssign};
 use tracing::info;
 
+use crate::Context;
 use crate::commands::utils::random_color;
 use crate::constants::{HTTP_CLIENT, TIMEZONE};
-use crate::{Context, Error};
 
 const EAT_API_URL: &str = "https://tum-dev.github.io/eat-api";
 const GOOGLE_MAPS_SEARCH_URL: &str = "https://www.google.de/maps/place/";
@@ -62,7 +62,7 @@ struct WeekMenu {
 }
 
 #[poise::command(slash_command, prefix_command, subcommands("next", "week", "list"))]
-pub(crate) async fn mensa(_: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn mensa(_: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
@@ -70,7 +70,7 @@ const DISCORD_FIELDS_ON_AN_EMBED_LIMIT: usize = 25;
 
 /// list all canteens
 #[poise::command(slash_command, prefix_command)]
-async fn list(ctx: Context<'_>) -> Result<(), Error> {
+async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
     let canteens = get_canteens().await?;
 
@@ -102,7 +102,7 @@ async fn list(ctx: Context<'_>) -> Result<(), Error> {
 async fn next(
     ctx: Context<'_>,
     #[description = "default Mensa Garching"] canteen_name: Option<String>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
     let (canteen, mut menu, now) = get_menu(canteen_name).await?;
 
@@ -132,7 +132,7 @@ async fn next(
 async fn week(
     ctx: Context<'_>,
     #[description = "default Mensa Garching"] canteen_name: Option<String>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
     let (canteen, menu, _) = get_menu(canteen_name).await?;
 
@@ -178,7 +178,7 @@ fn link_location(canteen: &Canteen) -> String {
     )
 }
 
-async fn get_emojis_for_labels() -> Result<HashMap<String, String>, Error> {
+async fn get_emojis_for_labels() -> anyhow::Result<HashMap<String, String>> {
     Ok(HTTP_CLIENT
         .get(format!("{}/enums/labels.json", EAT_API_URL))
         .send()
@@ -201,7 +201,7 @@ async fn get_canteens() -> reqwest::Result<Vec<Canteen>> {
 
 async fn get_menu(
     canteen_name: Option<String>,
-) -> Result<(Canteen, WeekMenu, DateTime<Tz>), Error> {
+) -> anyhow::Result<(Canteen, WeekMenu, DateTime<Tz>)> {
     let canteen_id = canteen_name
         .unwrap_or("Mensa Garching".to_string())
         .to_lowercase();
@@ -209,7 +209,7 @@ async fn get_menu(
         .await?
         .into_iter()
         .find(|m| m.name.to_lowercase().contains(&canteen_id))
-        .ok_or("Canteen not found")?;
+        .ok_or_else(|| anyhow!("Canteen not found"))?;
 
     let day = next_week_day();
     let week = day.iso_week().week();
@@ -232,10 +232,9 @@ async fn get_menu(
         }
         Err(e) => {
             if e.status() == Some(StatusCode::NOT_FOUND) {
-                return Err("No menu found, maybe the mensa is closed?".into());
+                bail!("No menu found, maybe the mensa is closed?");
             }
-
-            Err(format!("Menu fetching failed: {}", e).into())
+            Err(e).context("Menu fetching failed")
         }
     }
 }
@@ -248,6 +247,5 @@ fn next_week_day() -> DateTime<Tz> {
     while now.weekday() == Weekday::Sat || now.weekday() == Weekday::Sun {
         now.add_assign(Duration::days(1));
     }
-    info!("Looking for menu for {}", now.format("%Y-%m-%d"));
     now
 }

@@ -1,5 +1,5 @@
+use crate::Context;
 use crate::commands::utils::parse_date;
-use crate::{Context, Error};
 use poise::serenity_prelude::FormattedTimestamp;
 use poise::serenity_prelude::model::timestamp;
 use sqlx::query;
@@ -11,13 +11,13 @@ use timestamp::Timestamp;
     guild_only,
     subcommands("add", "delete")
 )]
-pub(crate) async fn birthday(_: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn birthday(_: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 /// Sign up for birthday wishes
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn add(ctx: Context<'_>, date: String) -> Result<(), Error> {
+pub(crate) async fn add(ctx: Context<'_>, date: String) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
 
     let birthday = parse_date(&date).await?;
@@ -41,7 +41,7 @@ pub(crate) async fn add(ctx: Context<'_>, date: String) -> Result<(), Error> {
 
 /// Delete your birthday
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn delete(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn delete(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     query!(

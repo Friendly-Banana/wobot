@@ -22,7 +22,7 @@ macro_rules! done {
         use poise::CreateReply;
         $ctx.send(
             CreateReply::default()
-                .content("Done✅")
+                .content("Done")
                 .ephemeral(true)
                 .reply(true),
         )

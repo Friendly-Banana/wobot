@@ -1,4 +1,4 @@
-use crate::{Context, Data, Error, done};
+use crate::{Context, Data, done};
 use anyhow::Context as _;
 use poise::serenity_prelude::{
     CacheHttp, ChannelId, EmojiId, GuildId, MESSAGE_CODE_LIMIT, Mentionable, Message, MessageId,
@@ -8,7 +8,7 @@ use poise::{CreateReply, serenity_prelude};
 use sqlx::{query, query_as};
 use std::collections::VecDeque;
 use std::time::Duration;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -18,13 +18,13 @@ const REACTION_ROLE_TIMEOUT: Duration = Duration::from_secs(60);
     guild_only,
     subcommands("list", "add_easy", "add", "remove")
 )]
-pub(crate) async fn reaction_role(_ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn reaction_role(_ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 /// Choose the role, then react to the message with the emoji you want to use
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error> {
+pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     ctx.say("React to the message with the emoji").await?;
 
@@ -36,7 +36,6 @@ pub(crate) async fn add_easy(ctx: Context<'_>, role: RoleId) -> Result<(), Error
         .await;
     let reaction = match reaction {
         None => {
-            info!("Timeout :(, try again");
             ctx.reply("Timeout :(, try again").await?;
             return Ok(());
         }
@@ -57,7 +56,7 @@ pub(crate) async fn add(
     role: RoleId,
     #[description = "Existing Message to react to"] message: Message,
     emoji: ReactionType,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     add_reaction_role(ctx, role, message, emoji).await
 }
@@ -67,61 +66,33 @@ async fn add_reaction_role(
     role_id: RoleId,
     message: Message,
     reaction: ReactionType,
-) -> Result<(), Error> {
-    let mut roles = ctx
-        .guild_id()
-        .expect("guild_only")
-        .roles(ctx.http())
-        .await?;
-    if !roles.contains_key(&role_id) {
-        debug!("Couldn't find role, make sure it exists");
-        ctx.say("Couldn't find role, make sure it exists").await?;
-        return Ok(());
-    }
-
-    if let ReactionType::Custom { id, .. } = reaction
-        && ctx
-            .guild_id()
-            .expect("guild_only")
-            .emoji(ctx.http(), id)
-            .await
-            .is_err()
-    {
-        debug!("Couldn't find emoji, make sure it's from this guild");
-        ctx.say("Couldn't find emoji, make sure it's from this guild")
-            .await?;
-        return Ok(());
-    }
-
-    let role = roles.remove(&role_id).expect("role exists");
+) -> anyhow::Result<()> {
     info!(
-        "Adding reaction role '{}' here {} with emoji {}...",
-        role.name,
+        "Adding reaction role {} here {} with emoji {}...",
+        role_id,
         message.link(),
         reaction
     );
 
     let emoji_id = get_emoji_id(reaction.clone(), ctx.data()).await?;
     let guild_id = ctx.guild_id().expect("guild_only");
-    if let Err(e) = query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
+    query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
         message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
-    ).execute(&ctx.data().database).await {
-        info!("Adding failed, possible duplicate: {e}");
-        ctx.say("Assigning failed, is the role/emoji already assigned to this message?")
-            .await?;
-        return Ok(());
-    }
+    )
+        .execute(&ctx.data().database).await
+        .context("Adding reaction role failed, is the role/emoji already assigned to this message?")?;
+
     {
         let mut reaction_roles = ctx.data().reaction_msgs.write().expect("reaction_msgs");
-        reaction_roles.insert(message.id.into())
-    };
+        reaction_roles.insert(message.id.into());
+    }
 
     message.react(ctx.http(), reaction).await?;
     done!(ctx);
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn remove(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn remove(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     ctx.say("React to the message").await?;
 
@@ -133,7 +104,6 @@ pub(crate) async fn remove(ctx: Context<'_>) -> Result<(), Error> {
         .await;
     let reaction = match reaction {
         None => {
-            info!("Timeout :(, try again");
             ctx.say("Timeout :(, try again").await?;
             return Ok(());
         }
@@ -144,7 +114,7 @@ pub(crate) async fn remove(ctx: Context<'_>) -> Result<(), Error> {
     remove_reaction_role(ctx, reaction).await
 }
 
-async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<(), Error> {
+async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> anyhow::Result<()> {
     info!(
         "Removing reaction role here {} with emoji {}...",
         reaction
@@ -168,7 +138,7 @@ async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> Result<()
 }
 
 #[poise::command(slash_command, prefix_command, guild_only)]
-pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
     let show_all_roles = ctx.framework().options.owners.contains(&ctx.author().id);
     let reaction_roles = if show_all_roles {
         ctx.defer_ephemeral().await?;
@@ -222,7 +192,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn get_emoji_id(reaction: ReactionType, data: &Data) -> Result<i64, Error> {
+async fn get_emoji_id(reaction: ReactionType, data: &Data) -> anyhow::Result<i64> {
     match reaction {
         ReactionType::Custom { id, .. } => Ok(id.get() as i64),
         ReactionType::Unicode(unicode) => {
@@ -248,7 +218,7 @@ async fn get_emoji_from_id(
     ctx: Context<'_>,
     guild_id: i64,
     emoji_id: i64,
-) -> Result<String, Error> {
+) -> anyhow::Result<String> {
     if emoji_id >> 32 == 0 {
         let emoji = query!(
             "SELECT unicode FROM unicode_to_emoji WHERE id = $1",
@@ -256,7 +226,7 @@ async fn get_emoji_from_id(
         )
         .fetch_one(&ctx.data().database)
         .await
-        .context("Emoji should have gotten an id")?;
+        .with_context(|| format!("Emoji {emoji_id} should be in the database"))?;
         return Ok(emoji.unicode);
     }
     Ok(GuildId::new(guild_id as u64)
@@ -271,7 +241,7 @@ pub(crate) async fn change_reaction_role(
     data: &Data,
     reaction: &Reaction,
     add: bool,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     let has_reaction_role = data
         .reaction_msgs
         .read()
@@ -300,49 +270,39 @@ pub(crate) async fn change_reaction_role(
         return Ok(());
     };
     let record = reaction_role.unwrap();
-    let user_id = match reaction.user_id {
-        None => {
-            error!(
-                "Couldn't get user from reaction {} here {}",
+    let user_id = reaction.user_id.with_context(|| {
+        format!(
+            "Couldn't get user from reaction {} here {}",
+            reaction.emoji,
+            reaction
+                .message_id
+                .link(reaction.channel_id, reaction.guild_id)
+        )
+    })?;
+    let member = GuildId::new(record.guild_id as u64)
+        .member(ctx.http(), user_id)
+        .await
+        .with_context(|| {
+            format!(
+                "Couldn't get member {} from reaction {} here {}",
+                user_id.mention(),
                 reaction.emoji,
                 reaction
                     .message_id
                     .link(reaction.channel_id, reaction.guild_id)
-            );
-            return Err("Couldn't get user from reaction".into());
-        }
-        Some(user_id) => user_id,
-    };
-    let member = GuildId::new(record.guild_id as u64)
-        .member(ctx.http(), user_id)
-        .await;
-    if let Err(e) = member {
-        error!(
-            "Couldn't get member {} from reaction {} here {}: {}",
-            user_id.mention(),
-            reaction.emoji,
-            reaction
-                .message_id
-                .link(reaction.channel_id, reaction.guild_id),
-            e
-        );
-        return Err("Couldn't get user from reaction".into());
-    }
+            )
+        })?;
 
     let role_id = RoleId::new(record.role_id as u64);
-    let member = member.unwrap();
     let change = if add {
         member.add_role(ctx.http(), role_id).await
     } else {
         member.remove_role(ctx.http(), role_id).await
     };
-    if let Err(e) = change {
+    change.with_context(|| {
         let typ = if add { "add" } else { "remove" };
-        error!("Couldn't {} role {}: {}", typ, record.role_id, e);
-        Err(format!("Couldn't {} role {} role", typ, role_id).into())
-    } else {
-        Ok(())
-    }
+        format!("Couldn't {} role {}", typ, role_id)
+    })
 }
 
 #[allow(dead_code)]

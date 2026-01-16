@@ -10,13 +10,14 @@ use sqlx::PgPool;
 use sqlx::{query, query_as};
 use tracing::{info, warn};
 
+use crate::Context;
 use crate::commands::utility::feature_state::FeatureState;
 use crate::commands::utility::feature_state::FeatureState::{
     All, Implemented, Postponed, Rejected, ToDo,
 };
 use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::easy_embed::EasyEmbed;
-use crate::{Context, Error};
+use anyhow::bail;
 
 #[allow(dead_code)]
 pub(crate) struct Feature {
@@ -34,12 +35,12 @@ const PER_PAGE: u64 = 5;
     prefix_command,
     subcommands("list", "add", "update", "delete")
 )]
-pub(crate) async fn features(_ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn features(_ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn add(ctx: Context<'_>, name: String) -> Result<(), Error> {
+pub(crate) async fn add(ctx: Context<'_>, name: String) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     info!("{} added feature {}", ctx.author().name, name);
     query!(
@@ -54,7 +55,7 @@ pub(crate) async fn add(ctx: Context<'_>, name: String) -> Result<(), Error> {
 }
 
 #[poise::command(slash_command, prefix_command, owners_only)]
-pub(crate) async fn delete(ctx: Context<'_>, name: String) -> Result<(), Error> {
+pub(crate) async fn delete(ctx: Context<'_>, name: String) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     query!("DELETE FROM features WHERE features.name = $1", name)
         .execute(&ctx.data().database)
@@ -68,7 +69,7 @@ pub(crate) async fn update(
     ctx: Context<'_>,
     name: String,
     state: FeatureState,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let affected = query!(
         "UPDATE features SET state = $1 WHERE name = $2",
@@ -87,7 +88,7 @@ pub(crate) async fn update(
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
     let ctx_id = ctx.id();
     let prev_button_id = format!("{}prev", ctx.id());
@@ -144,7 +145,7 @@ pub(crate) async fn list(ctx: Context<'_>) -> Result<(), Error> {
         } else if press.data.custom_id == filter_id {
             let values = match &press.data.kind {
                 ComponentInteractionDataKind::StringSelect { values } => values,
-                _ => return Err("invalid select menu interaction".into()),
+                value => bail!("invalid select menu interaction {:?}", value),
             };
             let new_state = values[0].parse::<i64>().map_or(All, FeatureState::from);
             if new_state != state {
@@ -226,7 +227,7 @@ fn make_feature_embeds<T: EasyEmbed>(
     })
 }
 
-async fn get_feature_count(db: &PgPool, state: FeatureState) -> Result<u64, Error> {
+async fn get_feature_count(db: &PgPool, state: FeatureState) -> anyhow::Result<u64> {
     Ok(if state == All {
         query!("SELECT COUNT(*) as count FROM features")
             .fetch_one(db)
@@ -248,7 +249,7 @@ async fn get_features(
     db: &PgPool,
     state: FeatureState,
     offset: u64,
-) -> Result<Vec<Feature>, Error> {
+) -> anyhow::Result<Vec<Feature>> {
     Ok(if state == All {
         query_as!(
             Feature,

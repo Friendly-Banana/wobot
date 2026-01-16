@@ -1,6 +1,6 @@
 use poise::serenity_prelude::ActivityData;
 
-use crate::{Context, Error, done};
+use crate::{Context, done};
 
 #[derive(poise::ChoiceParameter, PartialEq)]
 pub(crate) enum ActivityChoice {
@@ -20,7 +20,7 @@ pub(crate) async fn activity(
     activity: ActivityChoice,
     action: String,
     #[description = "stream url if Streaming or details if Custom"] details: Option<String>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
 
     let activity = match activity {

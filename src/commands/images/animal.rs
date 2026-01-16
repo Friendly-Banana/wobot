@@ -6,12 +6,12 @@ use poise::{CreateReply, command};
 use rand::{Rng, rng};
 use serde::Deserialize;
 
+use crate::Context;
 use crate::constants::HTTP_CLIENT;
-use crate::{Context, Error};
 
 /// random animal, possible: Fox, Cat, Dog
 #[command(slash_command, prefix_command)]
-pub async fn floof(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn floof(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let image = get_random_image(&ctx.data().cat_api_token, &ctx.data().dog_api_token).await?;
@@ -21,7 +21,7 @@ pub async fn floof(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 const API_RANGE: Range<i32> = 0..6;
-async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<String, Error> {
+async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> anyhow::Result<String> {
     #[cfg(test)]
     let api_choice = tests::API_CHOICE.load(std::sync::atomic::Ordering::SeqCst);
     #[cfg(not(test))]
@@ -44,7 +44,7 @@ async fn get_random_image(cat_api_token: &str, dog_api_token: &str) -> Result<St
     }
 }
 
-async fn do_json<T: AnimalImage + for<'de> Deserialize<'de>>(url: &str) -> Result<String, Error> {
+async fn do_json<T: AnimalImage + for<'de> Deserialize<'de>>(url: &str) -> anyhow::Result<String> {
     let response = HTTP_CLIENT.get(url).send().await?;
     Ok(response.json::<T>().await?.extract_url())
 }

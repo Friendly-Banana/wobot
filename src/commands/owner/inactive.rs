@@ -6,11 +6,11 @@ use poise::serenity_prelude::Mentionable;
 use sqlx::query;
 use tracing::warn;
 
-use crate::{Context, Error};
+use crate::Context;
 
 /// List inactive users, default 60 days
 #[poise::command(slash_command, prefix_command, guild_only, owners_only)]
-pub(crate) async fn inactive(ctx: Context<'_>, days: Option<u32>) -> Result<(), Error> {
+pub(crate) async fn inactive(ctx: Context<'_>, days: Option<u32>) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().unwrap();
     let active = query!(

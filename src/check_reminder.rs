@@ -1,13 +1,10 @@
-use std::time::Duration;
-
 use poise::serenity_prelude::{
     ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, UserId,
 };
 use sqlx::{PgPool, query};
+use std::time::Duration;
 use tokio::time::interval;
-use tracing::{debug, error, info};
-
-use crate::Error;
+use tracing::{Level, debug, error, info, span, trace};
 
 pub(crate) fn check_reminders(ctx: Context, database: PgPool) {
     tokio::spawn(async move {
@@ -16,22 +13,23 @@ pub(crate) fn check_reminders(ctx: Context, database: PgPool) {
         loop {
             interval.tick().await;
 
-            if let Err(why) = send_reminders(&ctx, &database).await {
-                error!("Failed sending reminder: {}", why);
+            if let Err(err) = send_reminders(&ctx, &database).await {
+                error!(error = ?err, "Failed sending reminder");
             }
         }
     });
     info!("Started reminder thread");
 }
 
-async fn send_reminders(ctx: &Context, database: &PgPool) -> Result<(), Error> {
+async fn send_reminders(ctx: &Context, database: &PgPool) -> anyhow::Result<()> {
+    let _ = span!(Level::DEBUG, "Sending reminders").enter();
     let due = query!(
         "DELETE FROM reminder WHERE time <= now() + INTERVAL '59 seconds' RETURNING channel_id, msg_id, user_id, content"
     )
     .fetch_all(database)
     .await?;
+    debug!(?due, "Fetched due reminders");
 
-    debug!("Sending {} reminders...", due.len());
     for reminder in due {
         let channel = ChannelId::new(reminder.channel_id as u64);
         let original = channel.message(ctx, reminder.msg_id as u64).await?;
@@ -50,7 +48,7 @@ async fn send_reminders(ctx: &Context, database: &PgPool) -> Result<(), Error> {
             .allowed_mentions(only_users)
             .reference_message(&original);
         channel.send_message(ctx, message).await?;
+        trace!(?reminder, "Sent reminder");
     }
-    debug!("Sent all reminders");
     Ok(())
 }

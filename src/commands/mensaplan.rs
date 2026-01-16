@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{LazyLock, OnceLock};
 use std::time::Duration;
 
-use anyhow::{Context as _, anyhow};
+use anyhow::anyhow;
 use image::{DynamicImage, GenericImage};
 use itertools::Itertools;
 use mini_moka::sync::Cache;
@@ -17,7 +17,7 @@ use tracing::{debug, info};
 use crate::commands::utils::send_image;
 use crate::commands::utils::{get_avatar_url, load_avatar};
 use crate::constants::{HTTP_CLIENT, ONE_DAY, ONE_HOUR};
-use crate::{Context, Error};
+use crate::{Context, UserError};
 
 const MENSA_PLAN_API: &str = "https://mensa.gabriels.cloud/api";
 
@@ -71,7 +71,7 @@ async fn send_with_auth(ctx: Context<'_>, rb: RequestBuilder) -> Result<Response
 }
 
 #[poise::command(slash_command, prefix_command, subcommands("add", "delete", "show"))]
-pub(crate) async fn mp(_: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn mp(_: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
@@ -80,15 +80,16 @@ pub(crate) async fn mp(_: Context<'_>) -> Result<(), Error> {
 pub(crate) async fn add(
     ctx: Context<'_>,
     #[description = "a Letter and a Number"] position: String,
-    #[description = "Time until your position disappears, default 1 hour"] expires: Option<String>,
+    #[description = "Time until your position disappears, default 1 hour, max one day"]
+    expires: Option<String>,
     #[description = "Visible to all users, not only this server, default false. Always on in DMs!"]
     public: Option<bool>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let (letter, number) = parse_cruisine_letters(&position)?;
     let duration = match expires {
-        Some(x) => parse_duration::parse(x.as_str())?.min(MAX_DISAPPEAR_TIME),
+        Some(x) => parse_duration::parse(&x)?.min(MAX_DISAPPEAR_TIME),
         None => DEFAULT_DISAPPEAR_TIME,
     };
 
@@ -177,7 +178,7 @@ pub(crate) async fn add(
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn delete(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn delete(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
     send_with_auth(
         ctx,
@@ -195,20 +196,17 @@ pub(crate) async fn delete(ctx: Context<'_>) -> Result<(), Error> {
 
 /// see the plan
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn show(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn show(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
     show_plan(ctx).await
 }
 
-async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
+async fn show_plan(ctx: Context<'_>) -> anyhow::Result<()> {
     MENSA_PLAN_IMAGE.get_or_init(|| {
         info!("Loading mensa plan image");
         image::open(MENSA_PLAN_PATH).expect("Failed to load mensa plan image")
     });
-    let mut image = MENSA_PLAN_IMAGE
-        .get()
-        .context("MENSA_PLAN_IMAGE loaded")?
-        .clone();
+    let mut image = MENSA_PLAN_IMAGE.get().unwrap().clone();
 
     let positions = send_with_auth(
         ctx,
@@ -247,7 +245,8 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
             .images(imgs)
             .height_limit(SCALING)
             .width_limit(SCALING)
-            .stitch()?;
+            .stitch()
+            .map_err(|e| anyhow!("Failed to stitch images: {}", e))?;
         let x = X_OFFSET + tile.0 as u32 * SCALING;
         let y = Y_OFFSET + tile.1 as u32 * SCALING;
         image.copy_from(&stitch, x, y)?;
@@ -257,9 +256,11 @@ async fn show_plan(ctx: Context<'_>) -> Result<(), Error> {
     send_image(ctx, image, "mensa_plan.png".to_string()).await
 }
 
-fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
+fn parse_cruisine_letters(position: &str) -> anyhow::Result<(char, u8)> {
     if position.len() < 2 || position.len() > 3 {
-        return Err(anyhow!("Bad position format, 2-3 characters").into());
+        return Err(UserError::err(
+            "Invalid position format. Expected 2-3 characters like \"A1\" or \"B12\"",
+        ));
     }
 
     let position = position.to_ascii_uppercase();
@@ -270,15 +271,20 @@ fn parse_cruisine_letters(position: &str) -> Result<(char, u8), Error> {
     } else if chars.last().unwrap().is_ascii_alphabetic() {
         chars.pop().unwrap()
     } else {
-        return Err(anyhow!("Bad position format, no letter").into());
+        return Err(UserError::err(
+            "Position must contain a letter (e.g., \"A1\", \"B12\")",
+        ));
     };
 
-    let number = str::parse::<u8>(&chars.into_iter().collect::<String>())?;
+    let number = str::parse::<u8>(&chars.into_iter().collect::<String>())
+        .map_err(|e| UserError::err(format!("Invalid number in position: {}", e)))?;
 
     if (MIN_X..=MAX_X).contains(&letter) && (MIN_Y..=MAX_Y).contains(&number) {
         Ok((letter, number))
     } else {
-        Err(anyhow!("Bad position format, out of bounds: {MIN_X}-{MAX_X}, {MIN_Y}-{MAX_Y}").into())
+        Err(UserError::err(format!(
+            "Position out of bounds. Letters must be {MIN_X}-{MAX_X}, numbers must be {MIN_Y}-{MAX_Y}"
+        )))
     }
 }
 

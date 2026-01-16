@@ -5,6 +5,7 @@ use std::fs::read_to_string;
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
+use std::{error::Error, fmt};
 
 use crate::check_birthday::check_birthdays;
 use crate::check_reminder::check_reminders;
@@ -129,8 +130,30 @@ pub(crate) struct Data {
     reaction_msgs: RwLock<HashSet<u64>>,
 }
 
-type Error = Box<dyn std::error::Error + Send + Sync>;
-type Context<'a> = poise::Context<'a, Data, Error>;
+/// error type for user actionable issues like an invalid argument
+#[derive(Debug)]
+pub struct UserError {
+    pub message: String,
+}
+
+impl fmt::Display for UserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for UserError {}
+
+impl UserError {
+    pub fn err(msg: impl Into<String>) -> anyhow::Error {
+        Self {
+            message: msg.into(),
+        }
+        .into()
+    }
+}
+
+type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 
 #[tokio::main]
 async fn main() {
@@ -160,6 +183,7 @@ async fn main() {
             event_handler: |ctx, event, _framework, data| {
                 Box::pin(handler::event_handler(ctx, event, _framework, data))
             },
+            on_error: |error| Box::pin(async move { handler::on_error(error).await }),
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some("!".to_string()),
                 edit_tracker: Some(Arc::from(EditTracker::for_timespan(Duration::from_secs(

@@ -2,8 +2,8 @@ use poise::serenity_prelude::CreateEmbed;
 use poise::{CreateReply, command};
 use serde::Deserialize;
 
+use crate::Context;
 use crate::constants::HTTP_CLIENT;
-use crate::{Context, Error};
 
 const CAPI: &str = "https://api.capy.lol/v1";
 
@@ -24,7 +24,7 @@ struct Data<T> {
 
 /// random capybara together with a fact
 #[command(slash_command, prefix_command)]
-pub async fn capy(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn capy(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let response = HTTP_CLIENT.get(format!("{CAPI}/fact")).send().await?;

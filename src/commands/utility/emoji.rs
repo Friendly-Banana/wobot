@@ -1,6 +1,4 @@
-use std::sync::LazyLock;
-use std::time::Duration;
-
+use anyhow::Context as _;
 use base64::Engine;
 use poise::CreateReply;
 use poise::serenity_prelude::{
@@ -8,11 +6,13 @@ use poise::serenity_prelude::{
     CreateEmbed, EmojiIdentifier, Message, ReactionType,
 };
 use regex::Regex;
+use std::sync::LazyLock;
+use std::time::Duration;
 use tracing::error;
 
 use crate::commands::utils::remove_components_but_keep_embeds;
 use crate::constants::HTTP_CLIENT;
-use crate::{Context, Error, done};
+use crate::{Context, UserError, done};
 
 const ADD_EMOJIS_TIMEOUT: Duration = Duration::from_secs(30);
 const EMOJI_URL: &str = "https://cdn.discordapp.com/emojis/";
@@ -49,21 +49,15 @@ async fn add_emoji(
     name: String,
     data: Vec<u8>,
     content_type: &String,
-) -> Result<(), Error> {
-    let partial_guild = match ctx.partial_guild().await {
-        None => {
-            error!("Can't fetch guild {}", ctx.author());
-            ctx.say("Can't fetch your guild, try again later.").await?;
-            return Ok(());
-        }
-        Some(guild) => guild,
-    };
+) -> anyhow::Result<()> {
+    let partial_guild = ctx
+        .partial_guild()
+        .await
+        .context("Can't fetch your guild, try again later.")?;
     if partial_guild.emojis.iter().any(|(_, e)| e.name == name) {
-        ctx.reply(format!(
+        return Err(UserError::err(format!(
             "There already is an emoji with the same name {name}"
-        ))
-        .await?;
-        return Ok(());
+        )));
     }
 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
@@ -74,7 +68,7 @@ async fn add_emoji(
     Ok(())
 }
 
-async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> Result<(), Error> {
+async fn extract_and_upload_emojis(ctx: Context<'_>, emojis: Vec<NewEmoji>) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let add_uuid = format!("{}add", ctx.id());
@@ -177,12 +171,12 @@ fn extract_emojis(content: String) -> Vec<NewEmoji> {
         "copy_reactions"
     )
 )]
-pub(crate) async fn emoji(_ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn emoji(_ctx: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn remove(ctx: Context<'_>, emoji: EmojiIdentifier) -> Result<(), Error> {
+pub(crate) async fn remove(ctx: Context<'_>, emoji: EmojiIdentifier) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().expect("guild_only");
     guild.delete_emoji(ctx.http(), emoji.id).await?;
@@ -194,7 +188,7 @@ pub(crate) async fn rename(
     ctx: Context<'_>,
     emoji: EmojiIdentifier,
     new_name: String,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     let guild = ctx.guild_id().expect("guild_only");
     guild.edit_emoji(ctx.http(), emoji.id, &new_name).await?;
@@ -204,7 +198,7 @@ pub(crate) async fn rename(
 /// Add emojis from a message
 #[poise::command(slash_command, prefix_command)]
 #[inline]
-pub(crate) async fn copy_msg(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+pub(crate) async fn copy_msg(ctx: Context<'_>, message: Message) -> anyhow::Result<()> {
     let emojis = extract_emojis(message.content);
     extract_and_upload_emojis(ctx, emojis).await
 }
@@ -212,12 +206,12 @@ pub(crate) async fn copy_msg(ctx: Context<'_>, message: Message) -> Result<(), E
 /// Add emojis from reactions to a message
 #[poise::command(slash_command, prefix_command)]
 #[inline]
-pub(crate) async fn copy_reactions(ctx: Context<'_>, message: Message) -> Result<(), Error> {
+pub(crate) async fn copy_reactions(ctx: Context<'_>, message: Message) -> anyhow::Result<()> {
     let mut emojis = Vec::new();
     for r in message.reactions {
         match r.reaction_type {
             ReactionType::Custom { id, name, animated } => emojis.push(NewEmoji::new(
-                &name.expect("Emoji has name"),
+                &name.expect("Emoji has a name"),
                 &id.to_string(),
                 animated,
             )),
@@ -233,14 +227,18 @@ pub(crate) async fn copy_reactions(ctx: Context<'_>, message: Message) -> Result
 /// Add emojis from text
 #[poise::command(slash_command, prefix_command)]
 #[inline]
-pub(crate) async fn copy_text(ctx: Context<'_>, text: String) -> Result<(), Error> {
+pub(crate) async fn copy_text(ctx: Context<'_>, text: String) -> anyhow::Result<()> {
     let emojis = extract_emojis(text);
     extract_and_upload_emojis(ctx, emojis).await
 }
 
 /// Uploads image as new emoji
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn upload(ctx: Context<'_>, name: String, image: Attachment) -> Result<(), Error> {
+pub(crate) async fn upload(
+    ctx: Context<'_>,
+    name: String,
+    image: Attachment,
+) -> anyhow::Result<()> {
     match &image.content_type {
         None => {
             ctx.reply("Not an image").await?;

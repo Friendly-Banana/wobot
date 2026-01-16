@@ -1,5 +1,4 @@
 use ab_glyph::Font;
-use anyhow::Context as _;
 use image::DynamicImage;
 use image::codecs::png::PngEncoder;
 use imageproc::drawing::draw_text_mut;
@@ -8,7 +7,7 @@ use std::sync::OnceLock;
 use tracing::{debug, info};
 
 use crate::constants::{FONT, WHITE};
-use crate::{Context, Error, done};
+use crate::{Context, done};
 
 const FONT_SIZE: f32 = 50.0;
 const OBAMA_PATH: &str = "assets/obama_medal.jpg";
@@ -17,7 +16,7 @@ static OBAMA_IMAGE: OnceLock<DynamicImage> = OnceLock::new();
 /// Creates an obama medal meme
 /// the last 30 messages are checked for self-reactions and self replies
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn obama(ctx: Context<'_>) -> anyhow::Result<()> {
     ctx.defer_ephemeral().await?;
     debug!("Loading messages");
     let msgs = ctx
@@ -39,7 +38,7 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
                 image::open(OBAMA_PATH).expect("Failed to load obama image")
             });
 
-            let mut img = OBAMA_IMAGE.get().context("OBAMA_IMAGE loaded")?.clone();
+            let mut img = OBAMA_IMAGE.get().unwrap().clone();
             let scale = FONT.pt_to_px_scale(FONT_SIZE).unwrap();
             draw_text_mut(&mut img, WHITE, 150, 160, scale, &*FONT, text); // gets medal
             draw_text_mut(&mut img, WHITE, 540, 20, scale, &*FONT, text); // puts medal
@@ -64,7 +63,7 @@ pub(crate) async fn obama(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn has_self_reacted(ctx: Context<'_>, msg: &Message) -> Result<bool, Error> {
+async fn has_self_reacted(ctx: Context<'_>, msg: &Message) -> anyhow::Result<bool> {
     for reaction in &msg.reactions {
         if msg
             .reaction_users(ctx.http(), reaction.reaction_type.clone(), None, None)

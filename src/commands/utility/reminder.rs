@@ -6,8 +6,8 @@ use sqlx::{query, query_as};
 use std::convert::identity;
 use timestamp::Timestamp;
 
+use crate::Context;
 use crate::commands::utils::parse_duration_or_date;
-use crate::{Context, Error};
 
 const DEFAULT_REMINDER_TIME: Duration = Duration::hours(1);
 
@@ -21,7 +21,7 @@ pub(crate) struct Reminder {
 }
 
 #[poise::command(slash_command, prefix_command, subcommands("add", "list", "delete"))]
-pub(crate) async fn reminder(_: Context<'_>) -> Result<(), Error> {
+pub(crate) async fn reminder(_: Context<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
@@ -31,7 +31,7 @@ pub(crate) async fn add(
     ctx: Context<'_>,
     #[description = "date or duration, default 1 hour"] when: Option<String>,
     #[description = "The reminder message"] message: String,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let reminder_time = match when {
@@ -57,7 +57,7 @@ pub(crate) async fn add(
 }
 
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> Result<(), Error> {
+pub(crate) async fn list(ctx: Context<'_>, user: Option<User>) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let title;
@@ -99,7 +99,7 @@ pub(crate) async fn delete(
     ctx: Context<'_>,
     message: String,
     all: Option<bool>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     ctx.defer().await?;
 
     let del = if all.is_some_and(identity)

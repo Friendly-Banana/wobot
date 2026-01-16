@@ -1,5 +1,5 @@
+use crate::Context;
 use crate::commands::utils::remove_components_but_keep_embeds;
-use crate::{Context, Error};
 use poise::CreateReply;
 use poise::serenity_prelude::{
     ComponentInteractionCollector, CreateActionRow, CreateButton, CreateInteractionResponse,
@@ -42,7 +42,7 @@ fn get_pages(input: Cow<str>) -> Vec<String> {
 
 /// Consult a man page
 #[poise::command(slash_command, prefix_command)]
-pub(crate) async fn man(ctx: Context<'_>, text: String) -> Result<(), Error> {
+pub(crate) async fn man(ctx: Context<'_>, text: String) -> anyhow::Result<()> {
     ctx.defer().await?;
     debug!("man {}", text);
     let com = Command::new("man").args(text.split(' ')).output()?;

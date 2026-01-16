@@ -1,4 +1,4 @@
-use crate::{Context, Error};
+use crate::Context;
 use itertools::Itertools;
 use poise::CreateReply;
 use poise::serenity_prelude::{CreateAttachment, CreateEmbed};
@@ -81,7 +81,7 @@ pub(crate) async fn sql(
     ctx: Context<'_>,
     query: String,
     ephemeral: Option<bool>,
-) -> Result<(), Error> {
+) -> anyhow::Result<()> {
     if ephemeral.unwrap_or(true) {
         ctx.defer_ephemeral().await?;
     } else {
