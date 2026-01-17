@@ -3,6 +3,7 @@ use crate::CacheEntry;
 use crate::commands::{change_reaction_role, track_song};
 use crate::constants::HTTP_CLIENT;
 use crate::{Data, UserError};
+use anyhow::anyhow;
 use itertools::Itertools;
 use poise::serenity_prelude::json::json;
 use poise::serenity_prelude::*;
@@ -218,14 +219,11 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> anyhow::
             return Ok(());
         }
 
-        let payload = json!({
-            "model": "deepseek-v3.1:671b",
-            "messages": [{"role": "user", "content": config.prompt}],
-            "stream": false
-        });
+        let payload =
+            json!({"model": "deepseek-v3.1:671b", "prompt": config.prompt, "stream": false});
 
         let response = HTTP_CLIENT
-            .post("https://ollama.com/api/chat")
+            .post("https://ollama.com/api/generate")
             .bearer_auth(&data.ollama_token)
             .json(&payload)
             .send()
@@ -233,9 +231,9 @@ async fn celery_fact(ctx: &Context, data: &Data, channel: ChannelId) -> anyhow::
 
         let json: json::Value = response.json().await?;
 
-        let fact = json["message"]["content"]
+        let fact = json["response"]
             .as_str()
-            .unwrap_or("Celery contains negative calories, meaning you burn more energy chewing it than you gain from eating it!")
+            .ok_or_else(|| anyhow!("Bad API response: {}", json))?
             .to_string();
         channel.say(&ctx.http, fact).await?;
         drop(lock);

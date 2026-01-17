@@ -196,7 +196,6 @@ async fn main() {
         })
         .setup(move |ctx, ready, _framework| {
             Box::pin(async move {
-                info!("{} is connected!", ready.user.name);
                 register_globally(ctx, &[modules(), register_commands()]).await?;
                 for guild in &ready.guilds {
                     let modules = get_active_modules(&pool, guild.id).await?;
@@ -214,6 +213,7 @@ async fn main() {
                     pool.clone(),
                     config.event_channel_per_guild.clone(),
                 );
+                info!("{} is connected!", ready.user.name);
                 Ok(Data {
                     cat_api_token: env::var("CAT_API_TOKEN").unwrap_or_default(),
                     dog_api_token: env::var("DOG_API_TOKEN").unwrap_or_default(),

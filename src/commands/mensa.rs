@@ -1,6 +1,7 @@
-use anyhow::{Context as _, anyhow, bail};
+use anyhow::{Context as _, bail};
 use chrono::{DateTime, Datelike, Duration, Local, Timelike, Weekday};
 use chrono_tz::Tz;
+use deunicode::deunicode;
 use itertools::Itertools;
 use percent_encoding::utf8_percent_encode;
 use poise::CreateReply;
@@ -9,24 +10,25 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::ops::{Add, AddAssign};
-use tracing::info;
+use tokio::sync::OnceCell;
+use tracing::{debug, info};
 
-use crate::Context;
 use crate::commands::utils::random_color;
 use crate::constants::{HTTP_CLIENT, TIMEZONE};
+use crate::{Context, UserError};
 
 const EAT_API_URL: &str = "https://tum-dev.github.io/eat-api";
 const GOOGLE_MAPS_SEARCH_URL: &str = "https://www.google.de/maps/place/";
 
 #[allow(dead_code)]
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Location {
     address: String,
     latitude: f32,
     longitude: f32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct Canteen {
     name: String,
     canteen_id: String,
@@ -101,7 +103,9 @@ async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
 #[poise::command(slash_command, prefix_command)]
 async fn next(
     ctx: Context<'_>,
-    #[description = "default Mensa Garching"] canteen_name: Option<String>,
+    #[description = "default Mensa Garching"]
+    #[autocomplete = "autocomplete_canteen"]
+    canteen_name: Option<String>,
 ) -> anyhow::Result<()> {
     ctx.defer().await?;
     let (canteen, mut menu, now) = get_menu(canteen_name).await?;
@@ -131,7 +135,9 @@ async fn next(
 #[poise::command(slash_command, prefix_command)]
 async fn week(
     ctx: Context<'_>,
-    #[description = "default Mensa Garching"] canteen_name: Option<String>,
+    #[description = "default Mensa Garching"]
+    #[autocomplete = "autocomplete_canteen"]
+    canteen_name: Option<String>,
 ) -> anyhow::Result<()> {
     ctx.defer().await?;
     let (canteen, menu, _) = get_menu(canteen_name).await?;
@@ -178,38 +184,67 @@ fn link_location(canteen: &Canteen) -> String {
     )
 }
 
+static LABELS: OnceCell<HashMap<String, String>> = OnceCell::const_new();
 async fn get_emojis_for_labels() -> anyhow::Result<HashMap<String, String>> {
-    Ok(HTTP_CLIENT
-        .get(format!("{}/enums/labels.json", EAT_API_URL))
-        .send()
-        .await?
-        .json::<Vec<LabelCount>>()
-        .await?
-        .into_iter()
-        .map(|l| (l.enum_name, l.abbreviation))
-        .collect())
+    LABELS
+        .get_or_try_init(async || {
+            Ok(HTTP_CLIENT
+                .get(format!("{}/enums/labels.json", EAT_API_URL))
+                .send()
+                .await?
+                .json::<Vec<LabelCount>>()
+                .await?
+                .into_iter()
+                .map(|l| (l.enum_name, l.abbreviation))
+                .collect())
+        })
+        .await
+        .cloned()
 }
 
+static CANTEENS: OnceCell<Vec<Canteen>> = OnceCell::const_new();
 async fn get_canteens() -> reqwest::Result<Vec<Canteen>> {
-    HTTP_CLIENT
-        .get(format!("{}/enums/canteens.json", EAT_API_URL))
-        .send()
-        .await?
-        .json::<Vec<Canteen>>()
+    CANTEENS
+        .get_or_try_init(async || {
+            HTTP_CLIENT
+                .get(format!("{}/enums/canteens.json", EAT_API_URL))
+                .send()
+                .await?
+                .json::<Vec<Canteen>>()
+                .await
+        })
         .await
+        .cloned()
+}
+
+fn normalize(s: &str) -> String {
+    deunicode(s).to_lowercase().replace([' ', '-'], "")
+}
+
+async fn autocomplete_canteen(_ctx: Context<'_>, partial: &str) -> Vec<String> {
+    let partial = normalize(partial);
+    if let Ok(canteens) = get_canteens().await {
+        canteens
+            .into_iter()
+            .map(|c| c.name)
+            .filter(|name| normalize(name).contains(&partial))
+            .collect_vec()
+    } else {
+        vec![]
+    }
 }
 
 async fn get_menu(
     canteen_name: Option<String>,
 ) -> anyhow::Result<(Canteen, WeekMenu, DateTime<Tz>)> {
     let canteen_id = canteen_name
-        .unwrap_or("Mensa Garching".to_string())
-        .to_lowercase();
+        .as_deref()
+        .map_or("Mensa Garching".to_string(), normalize);
     let canteen = get_canteens()
         .await?
         .into_iter()
-        .find(|m| m.name.to_lowercase().contains(&canteen_id))
-        .ok_or_else(|| anyhow!("Canteen not found"))?;
+        .find(|c| normalize(&c.name).contains(&canteen_id))
+        .ok_or_else(|| UserError::err("Canteen not found"))?;
 
     let day = next_week_day();
     let week = day.iso_week().week();
@@ -227,7 +262,7 @@ async fn get_menu(
     match response.error_for_status() {
         Ok(response) => {
             let menu = response.json::<WeekMenu>().await?;
-            info!("Fetched menu {:?}", menu);
+            debug!("Fetched menu {:?}", menu);
             Ok((canteen, menu, day))
         }
         Err(e) => {
