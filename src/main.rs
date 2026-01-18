@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::{error::Error, fmt};
 
 use crate::check_birthday::check_birthdays;
+use crate::check_bets::check_bets;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
 #[cfg(feature = "activity")]
@@ -27,6 +28,7 @@ use tokio::sync::Mutex;
 use tracing::info;
 
 mod check_birthday;
+mod check_bets;
 mod check_reminder;
 mod commands;
 mod constants;
@@ -208,6 +210,7 @@ async fn main() {
                     .await?;
                 info!("Loaded reaction messages");
                 check_reminders(ctx.clone(), pool.clone());
+                check_bets(ctx.clone(), pool.clone());
                 check_birthdays(
                     ctx.clone(),
                     pool.clone(),
