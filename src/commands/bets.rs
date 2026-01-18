@@ -1,7 +1,7 @@
 use crate::{Context, UserError};
 use chrono::{DateTime, Utc};
 use poise::CreateReply;
-use poise::serenity_prelude::{ChannelId, MessageId, UserId, Mentionable};
+use poise::serenity_prelude::{ChannelId, Mentionable, MessageId, UserId};
 use sqlx::{query, query_as};
 
 #[poise::command(
@@ -80,10 +80,12 @@ pub async fn create(
         )));
 
     if let Some(ref p) = pings {
-         embed = embed.field("Attention", p, false);
+        embed = embed.field("Attention", p, false);
     }
 
-    let handle = ctx.send(CreateReply::default().embed(embed).reply(true)).await?;
+    let handle = ctx
+        .send(CreateReply::default().embed(embed).reply(true))
+        .await?;
     let message = handle.message().await?;
     let message_id = message.id.get() as i64;
 
@@ -120,8 +122,9 @@ pub async fn join(
             ctx.send(
                 CreateReply::default()
                     .content("You have already joined this bet!")
-                    .ephemeral(true)
-            ).await?;
+                    .ephemeral(true),
+            )
+            .await?;
             return Ok(());
         }
     }
@@ -143,11 +146,15 @@ pub async fn join(
             .embed(
                 poise::serenity_prelude::CreateEmbed::new()
                     .title("Joined Bet")
-                    .description(format!("You joined the bet #{}: **{}**", bet.bet_short_id, bet.description))
-                    .color(poise::serenity_prelude::Color::DARK_GREEN)
+                    .description(format!(
+                        "You joined the bet #{}: **{}**",
+                        bet.bet_short_id, bet.description
+                    ))
+                    .color(poise::serenity_prelude::Color::DARK_GREEN),
             )
-            .ephemeral(true)
-    ).await?;
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }
 
@@ -173,15 +180,19 @@ pub async fn watch(
             ctx.send(
                 CreateReply::default()
                     .content("You are already watching this bet!")
-                    .ephemeral(true)
-            ).await?;
+                    .ephemeral(true),
+            )
+            .await?;
             return Ok(());
         } else if row.status == "accepted" {
-             ctx.send(
+            ctx.send(
                 CreateReply::default()
-                    .content("You are already a participant in this bet and cannot switch to watching!")
-                    .ephemeral(true)
-            ).await?;
+                    .content(
+                        "You are already a participant in this bet and cannot switch to watching!",
+                    )
+                    .ephemeral(true),
+            )
+            .await?;
             return Ok(());
         }
     }
@@ -203,11 +214,15 @@ pub async fn watch(
             .embed(
                 poise::serenity_prelude::CreateEmbed::new()
                     .title("Watching Bet")
-                    .description(format!("You are now watching the bet #{}: **{}**", bet.bet_short_id, bet.description))
-                    .color(poise::serenity_prelude::Color::BLUE)
+                    .description(format!(
+                        "You are now watching the bet #{}: **{}**",
+                        bet.bet_short_id, bet.description
+                    ))
+                    .color(poise::serenity_prelude::Color::BLUE),
             )
-            .ephemeral(true)
-    ).await?;
+            .ephemeral(true),
+    )
+    .await?;
     Ok(())
 }
 
@@ -238,14 +253,18 @@ pub async fn status(
         bet.bet_short_id,
         &bet.description,
         bet.expiry,
-        &participants
+        &participants,
     );
 
     let link = format!(
         "https://discord.com/channels/{}/{}/{}",
         bet.guild_id, bet.channel_id, bet.message_id
     );
-    embed = embed.field("Original Message", format!("[Jump to Bet]({})", link), false);
+    embed = embed.field(
+        "Original Message",
+        format!("[Jump to Bet]({})", link),
+        false,
+    );
 
     ctx.send(CreateReply::default().embed(embed)).await?;
 
@@ -257,7 +276,7 @@ pub async fn status(
 pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
     let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
     if guild_id == 0 {
-         return Err(UserError::err("Bets only work in servers"));
+        return Err(UserError::err("Bets only work in servers"));
     }
 
     let bets = query!(
@@ -268,7 +287,12 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
     .await?;
 
     if bets.is_empty() {
-        ctx.send(CreateReply::default().content("No active bets found on this server.").ephemeral(true)).await?;
+        ctx.send(
+            CreateReply::default()
+                .content("No active bets found on this server.")
+                .ephemeral(true),
+        )
+        .await?;
         return Ok(());
     }
 
@@ -279,8 +303,12 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
     for bet in bets {
         embed = embed.field(
             format!("ID: {}", bet.bet_short_id),
-            format!("{} (Ends <t:{}:R>)", bet.description, bet.expiry.timestamp()),
-            false
+            format!(
+                "{} (Ends <t:{}:R>)",
+                bet.description,
+                bet.expiry.timestamp()
+            ),
+            false,
         );
     }
 
@@ -299,10 +327,13 @@ struct Participant {
     status: String,
 }
 
-async fn find_bet(ctx: Context<'_>, bet_short_id_opt: Option<i32>) -> Result<BetData, anyhow::Error> {
+async fn find_bet(
+    ctx: Context<'_>,
+    bet_short_id_opt: Option<i32>,
+) -> Result<BetData, anyhow::Error> {
     let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
     if guild_id == 0 {
-         return Err(UserError::err("Bets only work in servers"));
+        return Err(UserError::err("Bets only work in servers"));
     }
 
     if let Some(short_id) = bet_short_id_opt {
@@ -336,7 +367,7 @@ fn build_bet_embed(
     expiry: DateTime<Utc>,
     participants: &[Participant],
 ) -> poise::serenity_prelude::CreateEmbed {
-     let mut accepted = Vec::new();
+    let mut accepted = Vec::new();
     let mut watching = Vec::new();
 
     for p in participants {
@@ -362,7 +393,7 @@ fn build_bet_embed(
     if !accepted.is_empty() {
         embed = embed.field("Participants", accepted.join(", "), false);
     } else {
-         embed = embed.field("Participants", "No one yet", false);
+        embed = embed.field("Participants", "No one yet", false);
     }
 
     if !watching.is_empty() {
@@ -395,10 +426,16 @@ async fn update_bet_message(ctx: Context<'_>, bet_id: i32) -> anyhow::Result<()>
         bet.bet_short_id,
         &bet.description,
         bet.expiry,
-        &participants
+        &participants,
     );
 
-    channel_id.edit_message(ctx, message_id, poise::serenity_prelude::EditMessage::new().embed(embed)).await?;
+    channel_id
+        .edit_message(
+            ctx,
+            message_id,
+            poise::serenity_prelude::EditMessage::new().embed(embed),
+        )
+        .await?;
 
     Ok(())
 }
