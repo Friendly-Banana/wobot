@@ -1,10 +1,11 @@
 use poise::serenity_prelude::GuildId;
 
 pub(crate) use self::{
-    events::*, images::*, mensa::*, mensaplan::*, misc::*, modules::*, owner::*, reaction_role::*,
-    utility::*,
+    bets::*, events::*, images::*, mensa::*, mensaplan::*, misc::*, modules::*, owner::*,
+    reaction_role::*, utility::*,
 };
 
+mod bets;
 mod events;
 mod images;
 mod mensa;

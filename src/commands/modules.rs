@@ -148,6 +148,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, any
                 react(),
                 say(),
                 music(),
+                bet(),
             ],
             Module::Events => vec![event(), export_events(), reaction_role(), birthday()],
             Module::Misc => vec![
