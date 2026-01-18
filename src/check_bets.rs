@@ -107,7 +107,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         }
 
         if let Err(e) = channel.send_message(ctx, msg).await {
-             error!(error = ?e, "Failed to send bet expiration message");
+            error!(error = ?e, "Failed to send bet expiration message");
         } else {
             trace!(?bet.id, "Sent bet expiration");
         }

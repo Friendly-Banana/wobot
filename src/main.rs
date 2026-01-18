@@ -7,8 +7,8 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{error::Error, fmt};
 
-use crate::check_birthday::check_birthdays;
 use crate::check_bets::check_bets;
+use crate::check_birthday::check_birthdays;
 use crate::check_reminder::check_reminders;
 use crate::commands::*;
 #[cfg(feature = "activity")]
@@ -27,8 +27,8 @@ use sqlx::{PgPool, query};
 use tokio::sync::Mutex;
 use tracing::info;
 
-mod check_birthday;
 mod check_bets;
+mod check_birthday;
 mod check_reminder;
 mod commands;
 mod constants;
