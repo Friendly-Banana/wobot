@@ -2,7 +2,7 @@ use poise::serenity_prelude::GuildId;
 
 pub(crate) use self::{
     events::*, images::*, mensa::*, mensaplan::*, misc::*, modules::*, owner::*, reaction_role::*,
-    utility::*,
+    utility::*, bets::*,
 };
 
 mod events;
@@ -15,6 +15,7 @@ mod owner;
 mod reaction_role;
 mod utility;
 mod utils;
+mod bets;
 
 #[macro_export]
 macro_rules! done {
