@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'accepted')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b1a6973bba76ca2aba58406b51229d00af4fa7d2fd1d3387ea6c4ddcacaa7e03"
+}

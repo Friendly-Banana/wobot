@@ -21,7 +21,17 @@ pub async fn create(
     #[description = "How long until it expires? (datetime or duration)"] duration: String,
     #[description = "Users to ping (optional)"] pings: Option<String>,
 ) -> Result<(), anyhow::Error> {
+    if description.len() > 2000 {
+        return Err(UserError::err("Description is too long (max 2000 characters)."));
+    }
+
     let expiry = crate::commands::utils::parse_duration_or_date(Utc::now(), &duration).await?;
+    if expiry <= Utc::now() {
+        return Err(UserError::err("Expiry cannot be in the past."));
+    }
+    if expiry > Utc::now() + chrono::Duration::days(365) {
+         return Err(UserError::err("Expiry cannot be more than 1 year in the future."));
+    }
 
     let author_id = ctx.author().id.get() as i64;
     let channel_id = ctx.channel_id().get() as i64;
@@ -31,41 +41,71 @@ pub async fn create(
         return Err(UserError::err("Bets can only be created in servers."));
     }
 
-    let mut tx = ctx.data().database.begin().await?;
+    let mut attempts = 0;
+    let max_attempts = 3;
+    let mut bet_short_id = 0;
+    let mut bet_id = 0;
 
-    let next_id_row = sqlx::query!(
-        "SELECT COALESCE(MAX(bet_short_id), 0) + 1 as next_id FROM bets WHERE guild_id = $1",
-        guild_id
-    )
-    .fetch_one(&mut *tx)
-    .await?;
+    while attempts < max_attempts {
+        let mut tx = ctx.data().database.begin().await?;
 
-    let bet_short_id = next_id_row.next_id.unwrap_or(1);
+        let next_id_row = sqlx::query!(
+            "SELECT COALESCE(MAX(bet_short_id), 0) + 1 as next_id FROM bets WHERE guild_id = $1",
+            guild_id
+        )
+        .fetch_one(&mut *tx)
+        .await?;
 
-    let bet_row = sqlx::query!(
-        "INSERT INTO bets (guild_id, bet_short_id, channel_id, message_id, author_id, description, expiry) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-        guild_id,
-        bet_short_id,
-        channel_id,
-        0,
-        author_id,
-        description,
-        expiry
-    )
-    .fetch_one(&mut *tx)
-    .await?;
+        let current_short_id = next_id_row.next_id.unwrap_or(1);
 
-    let bet_id = bet_row.id;
+        // Try insert bet
+        let bet_row = sqlx::query!(
+            "INSERT INTO bets (guild_id, bet_short_id, channel_id, message_id, author_id, description, expiry) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+            guild_id,
+            current_short_id,
+            channel_id,
+            0,
+            author_id,
+            description,
+            expiry
+        )
+        .fetch_one(&mut *tx)
+        .await;
 
-    sqlx::query!(
-        "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'accepted')",
-        bet_id,
-        author_id
-    )
-    .execute(&mut *tx)
-    .await?;
+        match bet_row {
+            Ok(row) => {
+                bet_id = row.id;
+                bet_short_id = current_short_id;
 
-    tx.commit().await?;
+                sqlx::query!(
+                    "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'accepted')",
+                    bet_id,
+                    author_id
+                )
+                .execute(&mut *tx)
+                .await?;
+
+                tx.commit().await?;
+                break;
+            }
+            Err(e) => {
+                // Check if it's a unique constraint violation (code 23505 in Postgres)
+                if let Some(db_err) = e.as_database_error() {
+                    if let Some(code) = db_err.code() {
+                         if code == "23505" {
+                             attempts += 1;
+                             continue;
+                         }
+                    }
+                }
+                return Err(e.into());
+            }
+        }
+    }
+
+    if bet_id == 0 {
+        return Err(UserError::err("Failed to create bet due to high contention. Please try again."));
+    }
 
     let mut embed = poise::serenity_prelude::CreateEmbed::new()
         .title(format!("Bet #{}", bet_short_id))
@@ -83,8 +123,13 @@ pub async fn create(
         embed = embed.field("Attention", p, false);
     }
 
+    let allowed_mentions = poise::serenity_prelude::CreateAllowedMentions::new()
+        .everyone(false)
+        .all_roles(false)
+        .all_users(true);
+
     let handle = ctx
-        .send(CreateReply::default().embed(embed).reply(true))
+        .send(CreateReply::default().embed(embed).allowed_mentions(allowed_mentions).reply(true))
         .await?;
     let message = handle.message().await?;
     let message_id = message.id.get() as i64;
@@ -139,6 +184,11 @@ pub async fn join(
 
     if let Err(e) = update_bet_message(ctx, bet.id).await {
         tracing::error!("Failed to update bet message: {:?}", e);
+        ctx.send(
+            CreateReply::default()
+                .content("You were added to the bet, but I couldn't update the original message.")
+                .ephemeral(true)
+        ).await?;
     }
 
     ctx.send(
@@ -207,6 +257,11 @@ pub async fn watch(
 
     if let Err(e) = update_bet_message(ctx, bet.id).await {
         tracing::error!("Failed to update bet message: {:?}", e);
+        ctx.send(
+            CreateReply::default()
+                .content("You are now watching the bet, but I couldn't update the original message.")
+                .ephemeral(true)
+        ).await?;
     }
 
     ctx.send(
@@ -391,13 +446,27 @@ fn build_bet_embed(
         )));
 
     if !accepted.is_empty() {
-        embed = embed.field("Participants", accepted.join(", "), false);
+        let count = accepted.len();
+        let max_display = 20;
+        if count > max_display {
+             let displayed = accepted.iter().take(max_display).cloned().collect::<Vec<_>>().join(", ");
+             embed = embed.field("Participants", format!("{} and {} others", displayed, count - max_display), false);
+        } else {
+             embed = embed.field("Participants", accepted.join(", "), false);
+        }
     } else {
         embed = embed.field("Participants", "No one yet", false);
     }
 
     if !watching.is_empty() {
-        embed = embed.field("Watching", watching.join(", "), false);
+        let count = watching.len();
+        let max_display = 20;
+        if count > max_display {
+             let displayed = watching.iter().take(max_display).cloned().collect::<Vec<_>>().join(", ");
+             embed = embed.field("Watching", format!("{} and {} others", displayed, count - max_display), false);
+        } else {
+            embed = embed.field("Watching", watching.join(", "), false);
+        }
     }
 
     embed
