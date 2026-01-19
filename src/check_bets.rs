@@ -39,13 +39,12 @@ struct Participant {
 async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Result<()> {
     let _ = span!(Level::DEBUG, "Processing expired bets").enter();
 
-    // Fetch and delete expired bets
     let expired_bets = sqlx::query_as!(
         ExpiredBet,
         r#"
-        DELETE FROM bets
+        SELECT id, bet_short_id, channel_id, message_id, author_id, description, expiry as "expiry!"
+        FROM bets
         WHERE expiry <= now()
-        RETURNING id, bet_short_id, channel_id, message_id, author_id, description, expiry as "expiry!"
         "#
     )
     .fetch_all(database)
@@ -62,7 +61,6 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         let channel = ChannelId::new(bet.channel_id as u64);
         let original_msg_id = poise::serenity_prelude::MessageId::new(bet.message_id as u64);
 
-        // Fetch participants
         let participants = sqlx::query_as!(
             Participant,
             "SELECT user_id, status FROM bet_participants WHERE bet_id = $1",
@@ -81,6 +79,8 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         } else {
             user_mentions.join(", ")
         };
+
+
 
         let embed = poise::serenity_prelude::CreateEmbed::new()
             .title(format!("Bet #{} Expired!", bet.bet_short_id))
@@ -107,9 +107,17 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         }
 
         if let Err(e) = channel.send_message(ctx, msg).await {
-            error!(error = ?e, "Failed to send bet expiration message");
+             error!(error = ?e, "Failed to send bet expiration message");
         } else {
             trace!(?bet.id, "Sent bet expiration");
+        }
+
+        // Delete the bet after attempting to notify
+        if let Err(e) = sqlx::query!("DELETE FROM bets WHERE id = $1", bet_id)
+            .execute(database)
+            .await
+        {
+             error!(error = ?e, "Failed to delete expired bet {}", bet_id);
         }
     }
 

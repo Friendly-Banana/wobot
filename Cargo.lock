@@ -3966,7 +3966,6 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "url",
- "uuid",
  "webpki-roots 0.26.9",
 ]
 
@@ -4050,7 +4049,6 @@ dependencies = [
  "stringprep",
  "thiserror 2.0.12",
  "tracing",
- "uuid",
  "whoami",
 ]
 
@@ -4091,7 +4089,6 @@ dependencies = [
  "stringprep",
  "thiserror 2.0.12",
  "tracing",
- "uuid",
  "whoami",
 ]
 
@@ -4118,7 +4115,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tracing",
  "url",
- "uuid",
 ]
 
 [[package]]
@@ -5083,7 +5079,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 dependencies = [
  "getrandom 0.3.2",
- "serde",
 ]
 
 [[package]]
@@ -5704,7 +5699,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
  "uwuify",
 ]
 
