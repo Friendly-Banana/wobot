@@ -217,18 +217,24 @@ pub async fn join(
         .await?;
     }
 
+    let link = format!(
+        "https://discord.com/channels/{}/{}/{}",
+        bet.guild_id, bet.channel_id, bet.message_id
+    );
+
     ctx.send(
-        CreateReply::default()
-            .embed(
-                poise::serenity_prelude::CreateEmbed::new()
-                    .title("Joined Bet")
-                    .description(format!(
-                        "You joined the bet #{}: **{}**",
-                        bet.bet_short_id, bet.description
-                    ))
-                    .color(poise::serenity_prelude::Color::DARK_GREEN),
-            )
-            .ephemeral(true),
+        CreateReply::default().embed(
+            poise::serenity_prelude::CreateEmbed::new()
+                .title("Joined Bet")
+                .description(format!(
+                    "{} joined the bet #{}: **{}**\n\n[Jump to Bet]({})",
+                    ctx.author().mention(),
+                    bet.bet_short_id,
+                    bet.description,
+                    link
+                ))
+                .color(poise::serenity_prelude::Color::DARK_GREEN),
+        ),
     )
     .await?;
     Ok(())
@@ -407,6 +413,9 @@ struct BetData {
     id: i32,
     bet_short_id: i32,
     description: String,
+    guild_id: i64,
+    channel_id: i64,
+    message_id: i64,
 }
 
 struct Participant {
@@ -427,7 +436,7 @@ async fn find_bet(
     if let Some(short_id) = bet_short_id_opt {
         let record = query_as!(
             BetData,
-            "SELECT id, bet_short_id, description FROM bets WHERE guild_id = $1 AND bet_short_id = $2",
+            "SELECT id, bet_short_id, description, guild_id, channel_id, message_id FROM bets WHERE guild_id = $1 AND bet_short_id = $2",
             guild_id,
             short_id
         )
@@ -440,7 +449,7 @@ async fn find_bet(
     let channel_id = ctx.channel_id().get() as i64;
     let record = query_as!(
         BetData,
-        "SELECT id, bet_short_id, description FROM bets WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1",
+        "SELECT id, bet_short_id, description, guild_id, channel_id, message_id FROM bets WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1",
         channel_id
     )
     .fetch_optional(&ctx.data().database)
