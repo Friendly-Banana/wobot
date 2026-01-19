@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bet_participants (bet_id, user_id, watching) VALUES ($1, $2, false) ON CONFLICT (user_id, bet_id) DO UPDATE SET watching = false",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d6735db3541e21f4293bc2f2e0720ec533799bdc9010e73c2cdee707c12a8f6"
+}

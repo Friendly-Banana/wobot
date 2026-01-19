@@ -1,51 +1,44 @@
+use crate::commands::utils::{parse_duration_or_date, random_color};
+
 use crate::{Context, UserError};
 use chrono::{DateTime, Utc};
 use poise::CreateReply;
-use poise::serenity_prelude::{ChannelId, Mentionable, MessageId, UserId};
+use poise::serenity_prelude::{
+    ChannelId, CreateEmbed, CreateEmbedFooter, FormattedTimestamp, Mentionable, MessageId,
+    Timestamp, UserId,
+};
 use sqlx::{query, query_as};
+use tracing::error;
 
 #[poise::command(
     slash_command,
-    subcommands("create", "join", "watch", "status", "list"),
-    category = "Betting"
+    subcommands("create", "join", "watch", "status", "list")
 )]
 pub async fn bet(_ctx: Context<'_>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
 /// Create a new bet
-#[poise::command(slash_command)]
+#[poise::command(slash_command, guild_only)]
 pub async fn create(
     ctx: Context<'_>,
-    #[description = "What is the bet about?"] description: String,
-    #[description = "How long until it expires? (datetime or duration)"] duration: String,
-    #[description = "Users to ping (optional)"] pings: Option<String>,
+    #[description = "What is the bet about?"]
+    #[max_length = 4096]
+    description: String,
+    #[description = "When is it over? datetime or duration"] end: String,
 ) -> Result<(), anyhow::Error> {
-    let expiry = crate::commands::utils::parse_duration_or_date(Utc::now(), &duration).await?;
+    ctx.defer().await?;
+    let expiry = parse_duration_or_date(Utc::now(), &end).await?;
 
     let author_id = ctx.author().id.get() as i64;
     let channel_id = ctx.channel_id().get() as i64;
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-
-    if guild_id == 0 {
-        return Err(UserError::err("Bets can only be created in servers."));
-    }
+    let guild_id = ctx.guild_id().expect("guild_only").get() as i64;
 
     let mut tx = ctx.data().database.begin().await?;
 
-    let next_id_row = sqlx::query!(
-        "SELECT COALESCE(MAX(bet_short_id), 0) + 1 as next_id FROM bets WHERE guild_id = $1",
-        guild_id
-    )
-    .fetch_one(&mut *tx)
-    .await?;
-
-    let bet_short_id = next_id_row.next_id.unwrap_or(1);
-
     let bet_row = sqlx::query!(
-        "INSERT INTO bets (guild_id, bet_short_id, channel_id, message_id, author_id, description, expiry) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+        "INSERT INTO bets (guild_id, channel_id, message_id, author_id, description, expiry) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
         guild_id,
-        bet_short_id,
         channel_id,
         0,
         author_id,
@@ -58,7 +51,7 @@ pub async fn create(
     let bet_id = bet_row.id;
 
     sqlx::query!(
-        "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'accepted')",
+        "INSERT INTO bet_participants (bet_id, user_id, watching) VALUES ($1, $2, false)",
         bet_id,
         author_id
     )
@@ -67,21 +60,20 @@ pub async fn create(
 
     tx.commit().await?;
 
-    let mut embed = poise::serenity_prelude::CreateEmbed::new()
-        .title(format!("Bet #{}", bet_short_id))
+    let embed = CreateEmbed::new()
+        .title(format!("Bet #{}", bet_id))
         .description(&description)
-        .field("Expires", format!("<t:{}:R>", expiry.timestamp()), true)
-        .field("Bet ID", bet_short_id.to_string(), true)
+        .field(
+            "Expires",
+            FormattedTimestamp::from(Timestamp::from(expiry)).to_string(),
+            true,
+        )
         .field("Participants", ctx.author().mention().to_string(), false)
-        .color(crate::commands::utils::random_color())
-        .footer(poise::serenity_prelude::CreateEmbedFooter::new(format!(
-            "Use /bet join {} (or just /bet join)",
-            bet_short_id
+        .color(random_color())
+        .footer(CreateEmbedFooter::new(format!(
+            "Use /bet join {} to participate",
+            bet_id
         )));
-
-    if let Some(ref p) = pings {
-        embed = embed.field("Attention", p, false);
-    }
 
     let handle = ctx
         .send(CreateReply::default().embed(embed).reply(true))
@@ -104,33 +96,28 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn join(
     ctx: Context<'_>,
-    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i32>,
+    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i64>,
 ) -> Result<(), anyhow::Error> {
-    let bet = find_bet(ctx, bet_id).await?;
+    ctx.defer().await?;
+    let bet = get_bet(ctx, bet_id).await?;
     let user_id_i64 = ctx.author().id.get() as i64;
 
     let status_row = query!(
-        "SELECT status FROM bet_participants WHERE bet_id = $1 AND user_id = $2",
+        "SELECT watching FROM bet_participants WHERE bet_id = $1 AND user_id = $2",
         bet.id,
         user_id_i64
     )
     .fetch_optional(&ctx.data().database)
     .await?;
 
-    if let Some(row) = status_row {
-        if row.status == "accepted" {
-            ctx.send(
-                CreateReply::default()
-                    .content("You have already joined this bet!")
-                    .ephemeral(true),
-            )
-            .await?;
-            return Ok(());
-        }
+    if let Some(row) = status_row
+        && !row.watching
+    {
+        return Err(UserError::err("You have already joined this bet!"));
     }
 
     query!(
-        "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT (bet_id, user_id) DO UPDATE SET status = 'accepted'",
+        "INSERT INTO bet_participants (bet_id, user_id, watching) VALUES ($1, $2, false) ON CONFLICT (user_id, bet_id) DO UPDATE SET watching = false",
         bet.id,
         user_id_i64
     )
@@ -138,85 +125,59 @@ pub async fn join(
     .await?;
 
     if let Err(e) = update_bet_message(ctx, bet.id).await {
-        tracing::error!("Failed to update bet message: {:?}", e);
+        error!("Failed to update bet message: {:?}", e);
     }
 
     ctx.send(
-        CreateReply::default()
-            .embed(
-                poise::serenity_prelude::CreateEmbed::new()
-                    .title("Joined Bet")
-                    .description(format!(
-                        "You joined the bet #{}: **{}**",
-                        bet.bet_short_id, bet.description
-                    ))
-                    .color(poise::serenity_prelude::Color::DARK_GREEN),
-            )
-            .ephemeral(true),
+        CreateReply::default().embed(
+            CreateEmbed::new()
+                .title("Joined Bet")
+                .description(format!(
+                    "You joined the bet #{}: **{}**",
+                    bet.id, bet.description
+                ))
+                .color(poise::serenity_prelude::Color::DARK_GREEN),
+        ),
     )
     .await?;
     Ok(())
 }
 
-/// Watch a bet (get notified but not a participant)
+/// Watch a bet (get notified when it ends without participating)
 #[poise::command(slash_command)]
 pub async fn watch(
     ctx: Context<'_>,
-    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i32>,
+    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i64>,
 ) -> Result<(), anyhow::Error> {
-    let bet = find_bet(ctx, bet_id).await?;
+    ctx.defer().await?;
+    let bet = get_bet(ctx, bet_id).await?;
     let user_id_i64 = ctx.author().id.get() as i64;
 
-    let status_row = query!(
-        "SELECT status FROM bet_participants WHERE bet_id = $1 AND user_id = $2",
-        bet.id,
-        user_id_i64
-    )
-    .fetch_optional(&ctx.data().database)
-    .await?;
-
-    if let Some(row) = status_row {
-        if row.status == "watching" {
-            ctx.send(
-                CreateReply::default()
-                    .content("You are already watching this bet!")
-                    .ephemeral(true),
-            )
-            .await?;
-            return Ok(());
-        } else if row.status == "accepted" {
-            ctx.send(
-                CreateReply::default()
-                    .content(
-                        "You are already a participant in this bet and cannot switch to watching!",
-                    )
-                    .ephemeral(true),
-            )
-            .await?;
-            return Ok(());
-        }
-    }
-
-    query!(
-        "INSERT INTO bet_participants (bet_id, user_id, status) VALUES ($1, $2, 'watching') ON CONFLICT (bet_id, user_id) DO UPDATE SET status = 'watching'",
+    let result = query!(
+        "INSERT INTO bet_participants (bet_id, user_id, watching) VALUES ($1, $2, true)",
         bet.id,
         user_id_i64
     )
     .execute(&ctx.data().database)
-    .await?;
+    .await;
+    if let Err(sqlx::Error::Database(db_err)) = result
+        && db_err.is_unique_violation()
+    {
+        return Err(UserError::err("You are already participating in this bet!"));
+    };
 
     if let Err(e) = update_bet_message(ctx, bet.id).await {
-        tracing::error!("Failed to update bet message: {:?}", e);
+        error!("Failed to update bet message: {:?}", e);
     }
 
     ctx.send(
         CreateReply::default()
             .embed(
-                poise::serenity_prelude::CreateEmbed::new()
+                CreateEmbed::new()
                     .title("Watching Bet")
                     .description(format!(
                         "You are now watching the bet #{}: **{}**",
-                        bet.bet_short_id, bet.description
+                        bet.id, bet.description
                     ))
                     .color(poise::serenity_prelude::Color::BLUE),
             )
@@ -230,31 +191,27 @@ pub async fn watch(
 #[poise::command(slash_command)]
 pub async fn status(
     ctx: Context<'_>,
-    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i32>,
+    #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i64>,
 ) -> Result<(), anyhow::Error> {
-    let bet_data = find_bet(ctx, bet_id).await?;
+    ctx.defer().await?;
+    let bet_data = get_bet(ctx, bet_id).await?;
 
     let bet = query!(
-        "SELECT guild_id, channel_id, message_id, description, expiry, bet_short_id FROM bets WHERE id = $1",
+        "SELECT guild_id, channel_id, message_id, description, expiry FROM bets WHERE id = $1",
         bet_data.id
     )
     .fetch_one(&ctx.data().database)
     .await?;
 
     let participants = query_as!(
-        Participant,
-        "SELECT user_id, status FROM bet_participants WHERE bet_id = $1 ORDER BY status, user_id",
+        BetParticipant,
+        "SELECT user_id, watching FROM bet_participants WHERE bet_id = $1 ORDER BY watching, user_id",
         bet_data.id
     )
     .fetch_all(&ctx.data().database)
     .await?;
 
-    let mut embed = build_bet_embed(
-        bet.bet_short_id,
-        &bet.description,
-        bet.expiry,
-        &participants,
-    );
+    let mut embed = build_bet_embed(bet_data.id, &bet.description, bet.expiry, &participants);
 
     let link = format!(
         "https://discord.com/channels/{}/{}/{}",
@@ -274,13 +231,11 @@ pub async fn status(
 /// List all active bets in this server
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-    if guild_id == 0 {
-        return Err(UserError::err("Bets only work in servers"));
-    }
+    ctx.defer().await?;
+    let guild_id = ctx.guild_id().expect("guild_only").get() as i64;
 
     let bets = query!(
-        "SELECT bet_short_id, description, expiry FROM bets WHERE guild_id = $1 ORDER BY expiry ASC LIMIT 25",
+        "SELECT id, description, expiry FROM bets WHERE guild_id = $1 ORDER BY expiry ASC LIMIT 25",
         guild_id
     )
     .fetch_all(&ctx.data().database)
@@ -296,13 +251,13 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
         return Ok(());
     }
 
-    let mut embed = poise::serenity_prelude::CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title("Active Bets")
-        .color(crate::commands::utils::random_color());
+        .color(random_color());
 
     for bet in bets {
         embed = embed.field(
-            format!("ID: {}", bet.bet_short_id),
+            format!("ID: {}", bet.id),
             format!(
                 "{} (Ends <t:{}:R>)",
                 bet.description,
@@ -316,76 +271,61 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-struct BetData {
-    id: i32,
-    bet_short_id: i32,
+struct Bet {
+    id: i64,
     description: String,
 }
 
-struct Participant {
-    user_id: i64,
-    status: String,
+struct BetParticipant {
+    pub user_id: i64,
+    pub watching: bool,
 }
 
-async fn find_bet(
-    ctx: Context<'_>,
-    bet_short_id_opt: Option<i32>,
-) -> Result<BetData, anyhow::Error> {
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-    if guild_id == 0 {
-        return Err(UserError::err("Bets only work in servers"));
-    }
+async fn get_bet(ctx: Context<'_>, bet_id_opt: Option<i64>) -> Result<Bet, anyhow::Error> {
+    if let Some(id) = bet_id_opt {
+        let record = query_as!(Bet, "SELECT id, description FROM bets WHERE id = $1", id)
+            .fetch_optional(&ctx.data().database)
+            .await?;
 
-    if let Some(short_id) = bet_short_id_opt {
-        let record = query_as!(
-            BetData,
-            "SELECT id, bet_short_id, description FROM bets WHERE guild_id = $1 AND bet_short_id = $2",
-            guild_id,
-            short_id
-        )
-        .fetch_optional(&ctx.data().database)
-        .await?;
-
-        return record.ok_or_else(|| UserError::err("Bet not found").into());
+        return record.ok_or_else(|| UserError::err("Bet not found"));
     }
 
     let channel_id = ctx.channel_id().get() as i64;
     let record = query_as!(
-        BetData,
-        "SELECT id, bet_short_id, description FROM bets WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1",
+        Bet,
+        "SELECT id, description FROM bets WHERE channel_id = $1 ORDER BY created_at DESC LIMIT 1",
         channel_id
     )
     .fetch_optional(&ctx.data().database)
     .await?;
 
-    record.ok_or_else(|| UserError::err("No active bets found in this channel").into())
+    record.ok_or_else(|| UserError::err("No active bets found in this channel"))
 }
 
 fn build_bet_embed(
-    short_id: i32,
+    short_id: i64,
     description: &str,
     expiry: DateTime<Utc>,
-    participants: &[Participant],
-) -> poise::serenity_prelude::CreateEmbed {
+    participants: &[BetParticipant],
+) -> CreateEmbed {
     let mut accepted = Vec::new();
     let mut watching = Vec::new();
 
     for p in participants {
         let mention = UserId::new(p.user_id as u64).mention().to_string();
-        if p.status == "accepted" {
-            accepted.push(mention);
-        } else if p.status == "watching" {
+        if p.watching {
             watching.push(mention);
+        } else {
+            accepted.push(mention);
         }
     }
 
-    let mut embed = poise::serenity_prelude::CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title(format!("Bet #{}", short_id))
         .description(description)
         .field("Expires", format!("<t:{}:R>", expiry.timestamp()), true)
-        .field("Bet ID", short_id.to_string(), true)
-        .color(crate::commands::utils::random_color())
-        .footer(poise::serenity_prelude::CreateEmbedFooter::new(format!(
+        .color(random_color())
+        .footer(CreateEmbedFooter::new(format!(
             "Use /bet join {} (or just /bet join)",
             short_id
         )));
@@ -403,9 +343,9 @@ fn build_bet_embed(
     embed
 }
 
-async fn update_bet_message(ctx: Context<'_>, bet_id: i32) -> anyhow::Result<()> {
+async fn update_bet_message(ctx: Context<'_>, bet_id: i64) -> anyhow::Result<()> {
     let bet = query!(
-        "SELECT channel_id, message_id, description, expiry, bet_short_id FROM bets WHERE id = $1",
+        "SELECT channel_id, message_id, description, expiry FROM bets WHERE id = $1",
         bet_id
     )
     .fetch_one(&ctx.data().database)
@@ -415,19 +355,14 @@ async fn update_bet_message(ctx: Context<'_>, bet_id: i32) -> anyhow::Result<()>
     let message_id = MessageId::new(bet.message_id as u64);
 
     let participants = query_as!(
-        Participant,
-        "SELECT user_id, status FROM bet_participants WHERE bet_id = $1 ORDER BY status, user_id",
+        BetParticipant,
+        "SELECT user_id, watching FROM bet_participants WHERE bet_id = $1 ORDER BY watching, user_id",
         bet_id
     )
     .fetch_all(&ctx.data().database)
     .await?;
 
-    let embed = build_bet_embed(
-        bet.bet_short_id,
-        &bet.description,
-        bet.expiry,
-        &participants,
-    );
+    let embed = build_bet_embed(bet_id, &bet.description, bet.expiry, &participants);
 
     channel_id
         .edit_message(

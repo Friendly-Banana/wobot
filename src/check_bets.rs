@@ -1,7 +1,7 @@
-use poise::serenity_prelude::{
-    ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, UserId,
-};
-use sqlx::{PgPool, query};
+use chrono::{DateTime, Utc};
+use itertools::Itertools;
+use poise::serenity_prelude::*;
+use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::{Level, debug, error, info, span, trace};
@@ -21,32 +21,12 @@ pub(crate) fn check_bets(ctx: Context, database: PgPool) {
     info!("Started bet checker thread");
 }
 
-struct ExpiredBet {
-    id: i32,
-    bet_short_id: i32,
-    channel_id: i64,
-    message_id: i64,
-    author_id: i64,
-    description: String,
-    expiry: chrono::DateTime<chrono::Utc>,
-}
-
-struct Participant {
-    user_id: i64,
-    status: String,
-}
-
 async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Result<()> {
-    let _ = span!(Level::DEBUG, "Processing expired bets").enter();
+    let _ = span!(Level::DEBUG, "Sending expired bets").enter();
 
-    // Fetch and delete expired bets
     let expired_bets = sqlx::query_as!(
-        ExpiredBet,
-        r#"
-        DELETE FROM bets
-        WHERE expiry <= now()
-        RETURNING id, bet_short_id, channel_id, message_id, author_id, description, expiry as "expiry!"
-        "#
+        Bet,
+        "SELECT id, channel_id, message_id, description, created_at FROM bets WHERE expiry <= now()"
     )
     .fetch_all(database)
     .await?;
@@ -60,12 +40,10 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
     for bet in expired_bets {
         let bet_id = bet.id;
         let channel = ChannelId::new(bet.channel_id as u64);
-        let original_msg_id = poise::serenity_prelude::MessageId::new(bet.message_id as u64);
+        let original_msg_id = MessageId::new(bet.message_id as u64);
 
-        // Fetch participants
-        let participants = sqlx::query_as!(
-            Participant,
-            "SELECT user_id, status FROM bet_participants WHERE bet_id = $1",
+        let participants = sqlx::query!(
+            "SELECT user_id, watching FROM bet_participants WHERE bet_id = $1",
             bet_id
         )
         .fetch_all(database)
@@ -73,6 +51,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
 
         let user_mentions: Vec<String> = participants
             .iter()
+            .filter(|p| !p.watching)
             .map(|p| UserId::new(p.user_id as u64).mention().to_string())
             .collect();
 
@@ -82,36 +61,48 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             user_mentions.join(", ")
         };
 
-        let embed = poise::serenity_prelude::CreateEmbed::new()
-            .title(format!("Bet #{} Expired!", bet.bet_short_id))
+        let embed = CreateEmbed::new()
+            .title(format!("Bet #{} is over!", bet.id))
             .description(&bet.description)
+            .field(
+                "Created at",
+                format!("<t:{}:R>", bet.created_at.timestamp()),
+                true,
+            )
             .field("Participants", participants_text, false)
-            .color(poise::serenity_prelude::Color::RED);
+            .color(Color::GOLD);
 
-        let allowed_mentions = CreateAllowedMentions::new()
-            .everyone(false)
-            .all_roles(false)
-            .all_users(true);
+        // ping participants and watchers
+        let user_mentions = participants
+            .iter()
+            .map(|p| UserId::new(p.user_id as u64).mention().to_string())
+            .join(", ");
 
-        let mut msg = CreateMessage::new()
+        let msg = CreateMessage::new()
             .embed(embed)
-            .allowed_mentions(allowed_mentions);
+            .reference_message(
+                MessageReference::new(MessageReferenceKind::Default, channel)
+                    .message_id(original_msg_id)
+                    .fail_if_not_exists(false),
+            )
+            .content(user_mentions);
 
-        match channel.message(ctx, original_msg_id).await {
-            Ok(original_msg) => {
-                msg = msg.reference_message(&original_msg);
-            }
-            Err(_) => {
-                debug!("Original bet message not found, sending regular message");
-            }
-        }
+        channel.send_message(ctx, msg).await?;
 
-        if let Err(e) = channel.send_message(ctx, msg).await {
-            error!(error = ?e, "Failed to send bet expiration message");
-        } else {
-            trace!(?bet.id, "Sent bet expiration");
-        }
+        sqlx::query!("DELETE FROM bets WHERE id = $1", bet_id)
+            .execute(database)
+            .await?;
+        trace!(?bet, "Sent bet expiration");
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+struct Bet {
+    pub id: i64,
+    pub channel_id: i64,
+    pub message_id: i64,
+    pub description: String,
+    pub created_at: DateTime<Utc>,
 }
