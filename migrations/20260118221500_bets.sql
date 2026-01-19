@@ -20,6 +20,7 @@ CREATE TABLE public.bet_participants
     bet_id  integer NOT NULL REFERENCES public.bets (id) ON DELETE CASCADE,
     user_id bigint NOT NULL,
     status  text   NOT NULL DEFAULT 'accepted', -- allowed values: 'accepted', 'denied', 'watching'
+    comment text   NOT NULL,
     CONSTRAINT bet_participants_status_check CHECK (status IN ('accepted', 'denied', 'watching')),
     PRIMARY KEY (bet_id, user_id)
 );

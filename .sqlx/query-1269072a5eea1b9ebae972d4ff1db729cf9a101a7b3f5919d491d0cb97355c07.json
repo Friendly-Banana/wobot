@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT id, bet_short_id, channel_id, message_id, author_id, description, expiry as \"expiry!\"\n        FROM bets\n        WHERE expiry <= now()\n        ",
+  "query": "\n        SELECT id, bet_short_id, channel_id, message_id, description\n        FROM bets\n        WHERE expiry <= now()\n        ",
   "describe": {
     "columns": [
       {
@@ -25,18 +25,8 @@
       },
       {
         "ordinal": 4,
-        "name": "author_id",
-        "type_info": "Int8"
-      },
-      {
-        "ordinal": 5,
         "name": "description",
         "type_info": "Text"
-      },
-      {
-        "ordinal": 6,
-        "name": "expiry!",
-        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -47,10 +37,8 @@
       false,
       false,
       false,
-      false,
-      false,
       false
     ]
   },
-  "hash": "46b9d4ed03d36905c1b65d3df6f295ee800db81ac33294034d4199e6155f3d40"
+  "hash": "1269072a5eea1b9ebae972d4ff1db729cf9a101a7b3f5919d491d0cb97355c07"
 }

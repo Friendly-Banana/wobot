@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT bet_short_id, description, expiry FROM bets WHERE guild_id = $1 ORDER BY expiry ASC LIMIT 25",
+  "query": "SELECT bet_short_id, description, expiry, channel_id, message_id FROM bets WHERE guild_id = $1 ORDER BY expiry ASC LIMIT 25",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,16 @@
         "ordinal": 2,
         "name": "expiry",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "channel_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "message_id",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
@@ -27,8 +37,10 @@
     "nullable": [
       false,
       false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "43717ee7a348bd74c2b68e13efffc33bd49cd440f1df3b2b2ce5edbae5495be1"
+  "hash": "9eef28619b71dfdf334308540d42aacabf1d2019c3a06754d5e84c4813913e3f"
 }
