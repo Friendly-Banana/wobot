@@ -1,7 +1,7 @@
 use poise::serenity_prelude::{
     ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, UserId,
 };
-use sqlx::{PgPool, query};
+use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::interval;
 use tracing::{Level, debug, error, info, span, trace};
@@ -26,14 +26,12 @@ struct ExpiredBet {
     bet_short_id: i32,
     channel_id: i64,
     message_id: i64,
-    author_id: i64,
     description: String,
-    expiry: chrono::DateTime<chrono::Utc>,
 }
 
 struct Participant {
     user_id: i64,
-    status: String,
+    comment: String,
 }
 
 async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Result<()> {
@@ -42,7 +40,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
     let expired_bets = sqlx::query_as!(
         ExpiredBet,
         r#"
-        SELECT id, bet_short_id, channel_id, message_id, author_id, description, expiry as "expiry!"
+        SELECT id, bet_short_id, channel_id, message_id, description
         FROM bets
         WHERE expiry <= now()
         "#
@@ -63,7 +61,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
 
         let participants = sqlx::query_as!(
             Participant,
-            "SELECT user_id, status FROM bet_participants WHERE bet_id = $1",
+            "SELECT user_id, comment FROM bet_participants WHERE bet_id = $1",
             bet_id
         )
         .fetch_all(database)
@@ -71,7 +69,14 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
 
         let user_mentions: Vec<String> = participants
             .iter()
-            .map(|p| UserId::new(p.user_id as u64).mention().to_string())
+            .map(|p| {
+                let mention = UserId::new(p.user_id as u64).mention().to_string();
+                if p.comment.is_empty() {
+                    mention
+                } else {
+                    format!("{} ({})", mention, p.comment)
+                }
+            })
             .collect();
 
         let participants_text = if user_mentions.is_empty() {
@@ -85,7 +90,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         let embed = poise::serenity_prelude::CreateEmbed::new()
             .title(format!("Bet #{} Expired!", bet.bet_short_id))
             .description(&bet.description)
-            .field("Participants", participants_text, false)
+            .field("Picks", &participants_text, false)
             .color(poise::serenity_prelude::Color::RED);
 
         let allowed_mentions = CreateAllowedMentions::new()
@@ -94,6 +99,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             .all_users(true);
 
         let mut msg = CreateMessage::new()
+            .content(format!("Attention: {}", participants_text))
             .embed(embed)
             .allowed_mentions(allowed_mentions);
 
