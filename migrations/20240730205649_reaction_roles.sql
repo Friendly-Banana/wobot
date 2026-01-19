@@ -1,16 +1,15 @@
--- Add migration script here
-create table public.unicode_to_emoji
+CREATE TABLE public.unicode_to_emoji
 (
     id      bigserial primary key,
-    unicode text not null unique
+    unicode text NOT NULL unique
 );
 
-create table public.reaction_roles
+CREATE TABLE public.reaction_roles
 (
-    message_id bigint not null,
-    channel_id bigint not null,
-    guild_id   bigint not null,
-    role_id    bigint not null,
-    emoji_id   bigint not null,
+    message_id bigint NOT NULL,
+    channel_id bigint NOT NULL,
+    guild_id   bigint NOT NULL,
+    role_id    bigint NOT NULL,
+    emoji_id   bigint NOT NULL,
     primary key (emoji_id, message_id)
 );

@@ -1,8 +1,7 @@
--- Add migration script here
-create table public.activity
+CREATE TABLE public.activity
 (
-    guild_id    bigint not null,
-    user_id     bigint not null,
-    last_active date default now(),
+    guild_id    bigint NOT NULL,
+    user_id     bigint NOT NULL,
+    last_active date DEFAULT now(),
     primary key (guild_id, user_id)
 );

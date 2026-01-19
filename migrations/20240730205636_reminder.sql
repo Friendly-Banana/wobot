@@ -1,9 +1,8 @@
--- Add migration script here
-create table public.reminder
+CREATE TABLE public.reminder
 (
-    channel_id bigint                   not null,
+    channel_id bigint                   NOT NULL,
     msg_id     bigint primary key,
-    user_id    bigint                   not null,
-    time       timestamp with time zone not null,
-    content    text                     not null
+    user_id    bigint                   NOT NULL,
+    time       timestamp with time zone NOT NULL,
+    content    text                     NOT NULL
 );

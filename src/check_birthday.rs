@@ -1,11 +1,11 @@
 use crate::constants::{ONE_DAY, TIMEZONE};
 use chrono::{Duration, Utc};
 use itertools::Itertools;
-use poise::serenity_prelude::{ChannelId, Context, CreateMessage, GuildId, Mentionable, UserId};
+use poise::serenity_prelude::{ChannelId, Context, GuildId, Mentionable, UserId};
 use sqlx::{PgPool, query};
 use std::collections::HashMap;
 use tokio::time::{Instant, interval_at};
-use tracing::{Level, debug, error, info, span, trace};
+use tracing::{Level, debug, error, info, span, trace, warn};
 
 pub(crate) fn check_birthdays(
     ctx: Context,
@@ -62,16 +62,20 @@ async fn send_birthdays(
             .iter()
             .map(|user| user.mention().to_string())
             .join(", ");
-        let content = format!(
+        let message = format!(
             "Happy birthday to {}! <:blobCuddleFerris:1313272092879360040>🎉",
             mentions
         );
-        let message = CreateMessage::new().content(content);
 
         if let Some(channel) = event_channel.get(&guild_id) {
-            channel.send_message(ctx, message).await?;
+            if let Err(e) = channel.say(ctx, message).await {
+                error!(error = ?e, guild = ?guild_id, users = ?users, "Failed to send birthday message");
+            } else {
+                trace!(users = ?users, guild = ?guild_id, "Sent congrats");
+            }
+        } else {
+            warn!(guild = ?guild_id, "No event channel configured for guild");
         }
-        trace!(users = ?users,guild = ?guild_id, "Sent congrats");
     }
     Ok(())
 }

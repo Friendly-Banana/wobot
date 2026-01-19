@@ -23,7 +23,7 @@ pub(crate) async fn add(ctx: Context<'_>, date: String) -> anyhow::Result<()> {
     let birthday = parse_date(&date).await?;
     ctx.reply(format!(
         "Added your birthday at {}",
-        FormattedTimestamp::from(Timestamp::from_unix_timestamp(birthday.timestamp())?)
+        FormattedTimestamp::from(Timestamp::from(birthday))
     ))
     .await?;
 

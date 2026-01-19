@@ -56,6 +56,23 @@ If you have a great idea or suggestion, feel free to open [an issue](https://git
 If you want a feature right now and can code, open [a pull request](https://github.com/Friendly-Banana/wobot/pulls).
 Please make sure to run `cargo fmt` before committing.
 
+### Dealing with the Database
+
+We use [SQLx](https://docs.rs/sqlx/latest/sqlx/) for database access and migrations.
+If you change database queries, you'll need to regenerate the .sqlx folder with:
+
+```sh
+cargo sqlx prepare
+```
+
+To change the database tables, please add a new migration with:
+
+```sh
+cargo sqlx migrate add <migration_name>
+```
+
+WoBot runs these automatically on startup.
+
 ## Running the Bot
 
 1. Create a Discord Bot on the [Discord Developer Portal](https://discord.com/developers/applications)
@@ -90,17 +107,19 @@ The [Mensaplan API](https://github.com/Friendly-Banana/mensaplan#api) is written
 ### Environment Variables
 
 Docker Compose automatically reads them from a `.env` file, for Cargo/the binary you need to set them, e.g. like so `source .env`.
-Only `DISCORD_TOKEN` is required, the others are optional.
+Only `DISCORD_TOKEN` and `DATABASE_URL` (already set in `compose.yaml`) are required, the others are optional.
 
 <details>
 <summary>Example .env file</summary>
 
 ```sh
-export DISCORD_TOKEN=''		# https://discord.com/developers/applications
-export CAT_API_TOKEN=''		# https://thecatapi.com/signup
-export DOG_API_TOKEN=''		# https://thedogapi.com/signup
-export MENSAPLAN_TOKEN=''	# https://github.com/Friendly-Banana/mensaplan#api
+DISCORD_TOKEN=''		# https://discord.com/developers/applications
+CAT_API_TOKEN=''		# https://thecatapi.com/signup
+DOG_API_TOKEN=''		# https://thedogapi.com/signup
+MENSAPLAN_TOKEN=''  	# https://github.com/Friendly-Banana/mensaplan#api
+OLLAMA_TOKEN=''
 ```
+
 </details>
 
 ### Configuration
