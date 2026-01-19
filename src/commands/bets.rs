@@ -23,11 +23,15 @@ pub async fn create(
     #[description = "Users to ping (optional)"] pings: Option<String>,
 ) -> Result<(), anyhow::Error> {
     if description.len() > 2000 {
-        return Err(UserError::err("Description is too long (max 2000 characters)."));
+        return Err(UserError::err(
+            "Description is too long (max 2000 characters).",
+        ));
     }
 
     if comment.len() > 100 {
-        return Err(UserError::err("Pick/reasoning is too long (max 100 characters)."));
+        return Err(UserError::err(
+            "Pick/reasoning is too long (max 100 characters).",
+        ));
     }
 
     let expiry = crate::commands::utils::parse_duration_or_date(Utc::now(), &duration).await?;
@@ -35,7 +39,9 @@ pub async fn create(
         return Err(UserError::err("Expiry cannot be in the past."));
     }
     if expiry > Utc::now() + chrono::Duration::days(365) {
-         return Err(UserError::err("Expiry cannot be more than 1 year in the future."));
+        return Err(UserError::err(
+            "Expiry cannot be more than 1 year in the future.",
+        ));
     }
 
     let author_id = ctx.author().id.get() as i64;
@@ -98,17 +104,20 @@ pub async fn create(
                 // Check if it's a unique constraint violation (code 23505 in Postgres)
                 if let Some(db_err) = e.as_database_error()
                     && let Some(code) = db_err.code()
-                         && code == "23505" {
-                             attempts += 1;
-                             continue;
-                         }
+                    && code == "23505"
+                {
+                    attempts += 1;
+                    continue;
+                }
                 return Err(e.into());
             }
         }
     }
 
     if bet_id == 0 {
-        return Err(UserError::err("Failed to create bet due to high contention. Please try again."));
+        return Err(UserError::err(
+            "Failed to create bet due to high contention. Please try again.",
+        ));
     }
 
     let mut embed = build_bet_embed(
@@ -132,7 +141,12 @@ pub async fn create(
         .all_users(true);
 
     let handle = ctx
-        .send(CreateReply::default().embed(embed).allowed_mentions(allowed_mentions).reply(true))
+        .send(
+            CreateReply::default()
+                .embed(embed)
+                .allowed_mentions(allowed_mentions)
+                .reply(true),
+        )
         .await?;
     let message = handle.message().await?;
     let message_id = message.id.get() as i64;
@@ -156,7 +170,9 @@ pub async fn join(
     #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i32>,
 ) -> Result<(), anyhow::Error> {
     if comment.len() > 100 {
-        return Err(UserError::err("Pick/reasoning is too long (max 100 characters)."));
+        return Err(UserError::err(
+            "Pick/reasoning is too long (max 100 characters).",
+        ));
     }
 
     let bet = find_bet(ctx, bet_id).await?;
@@ -171,15 +187,16 @@ pub async fn join(
     .await?;
 
     if let Some(row) = status_row
-        && row.status == "accepted" {
-            ctx.send(
-                CreateReply::default()
-                    .content("You have already joined this bet!")
-                    .ephemeral(true),
-            )
-            .await?;
-            return Ok(());
-        }
+        && row.status == "accepted"
+    {
+        ctx.send(
+            CreateReply::default()
+                .content("You have already joined this bet!")
+                .ephemeral(true),
+        )
+        .await?;
+        return Ok(());
+    }
 
     query!(
         "INSERT INTO bet_participants (bet_id, user_id, status, comment) VALUES ($1, $2, 'accepted', $3) ON CONFLICT (bet_id, user_id) DO UPDATE SET status = 'accepted', comment = $3",
@@ -195,8 +212,9 @@ pub async fn join(
         ctx.send(
             CreateReply::default()
                 .content("You were added to the bet, but I couldn't update the original message.")
-                .ephemeral(true)
-        ).await?;
+                .ephemeral(true),
+        )
+        .await?;
     }
 
     ctx.send(
@@ -267,9 +285,12 @@ pub async fn watch(
         tracing::error!("Failed to update bet message: {:?}", e);
         ctx.send(
             CreateReply::default()
-                .content("You are now watching the bet, but I couldn't update the original message.")
-                .ephemeral(true)
-        ).await?;
+                .content(
+                    "You are now watching the bet, but I couldn't update the original message.",
+                )
+                .ephemeral(true),
+        )
+        .await?;
     }
 
     ctx.send(
@@ -375,11 +396,7 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
             bet.expiry.timestamp()
         );
 
-        embed = embed.field(
-            format!("ID: {}", bet.bet_short_id),
-            desc,
-            false,
-        );
+        embed = embed.field(format!("ID: {}", bet.bet_short_id), desc, false);
     }
 
     ctx.send(CreateReply::default().embed(embed)).await?;
@@ -444,9 +461,9 @@ fn build_bet_embed(
     for p in participants {
         let mention = UserId::new(p.user_id as u64).mention().to_string();
         let entry = if p.comment.is_empty() {
-             mention
+            mention
         } else {
-             format!("{} ({})", mention, p.comment)
+            format!("{} ({})", mention, p.comment)
         };
 
         if p.status == "accepted" {
@@ -459,8 +476,6 @@ fn build_bet_embed(
     let mut embed = poise::serenity_prelude::CreateEmbed::new()
         .title(format!("Bet #{}", short_id))
         .description(description)
-        .field("Expires", format!("<t:{}:R>", expiry.timestamp()), true)
-        .field("Bet ID", short_id.to_string(), true)
         .color(crate::commands::utils::random_color())
         .footer(poise::serenity_prelude::CreateEmbedFooter::new(format!(
             "Join this bet with /bet join <reasoning> {}",
@@ -471,10 +486,19 @@ fn build_bet_embed(
         let count = accepted.len();
         let max_display = 20;
         if count > max_display {
-             let displayed = accepted.iter().take(max_display).cloned().collect::<Vec<_>>().join(", ");
-             embed = embed.field("Participants", format!("{} and {} others", displayed, count - max_display), false);
+            let displayed = accepted
+                .iter()
+                .take(max_display)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            embed = embed.field(
+                "Participants",
+                format!("{} and {} others", displayed, count - max_display),
+                false,
+            );
         } else {
-             embed = embed.field("Participants", accepted.join("\n"), false);
+            embed = embed.field("Participants", accepted.join("\n"), false);
         }
     } else {
         embed = embed.field("Participants", "No one yet", false);
@@ -484,12 +508,23 @@ fn build_bet_embed(
         let count = watching.len();
         let max_display = 20;
         if count > max_display {
-             let displayed = watching.iter().take(max_display).cloned().collect::<Vec<_>>().join(", ");
-             embed = embed.field("Watching", format!("{} and {} others", displayed, count - max_display), false);
+            let displayed = watching
+                .iter()
+                .take(max_display)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
+            embed = embed.field(
+                "Watching",
+                format!("{} and {} others", displayed, count - max_display),
+                false,
+            );
         } else {
             embed = embed.field("Watching", watching.join("\n"), false);
         }
     }
+
+    embed = embed.field("Expires", format!("<t:{}:R>", expiry.timestamp()), true);
 
     embed
 }
