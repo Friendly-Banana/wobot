@@ -67,7 +67,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         .fetch_all(database)
         .await?;
 
-        let user_mentions: Vec<String> = participants
+        let picks_list: Vec<String> = participants
             .iter()
             .map(|p| {
                 let mention = UserId::new(p.user_id as u64).mention().to_string();
@@ -79,18 +79,23 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             })
             .collect();
 
-        let participants_text = if user_mentions.is_empty() {
+        let pings_list: Vec<String> = participants
+            .iter()
+            .map(|p| UserId::new(p.user_id as u64).mention().to_string())
+            .collect();
+
+        let picks_text = if picks_list.is_empty() {
             "No participants".to_string()
         } else {
-            user_mentions.join(", ")
+            picks_list.join(", ")
         };
 
-
+        let pings_text = pings_list.join(" ");
 
         let embed = poise::serenity_prelude::CreateEmbed::new()
             .title(format!("Bet #{} Expired!", bet.bet_short_id))
             .description(&bet.description)
-            .field("Picks", &participants_text, false)
+            .field("Picks", &picks_text, false)
             .color(poise::serenity_prelude::Color::RED);
 
         let allowed_mentions = CreateAllowedMentions::new()
@@ -99,7 +104,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             .all_users(true);
 
         let mut msg = CreateMessage::new()
-            .content(format!("Attention: {}", participants_text))
+            .content(pings_text)
             .embed(embed)
             .allowed_mentions(allowed_mentions);
 
@@ -113,7 +118,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
         }
 
         if let Err(e) = channel.send_message(ctx, msg).await {
-             error!(error = ?e, "Failed to send bet expiration message");
+            error!(error = ?e, "Failed to send bet expiration message");
         } else {
             trace!(?bet.id, "Sent bet expiration");
         }
@@ -123,7 +128,7 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             .execute(database)
             .await
         {
-             error!(error = ?e, "Failed to delete expired bet {}", bet_id);
+            error!(error = ?e, "Failed to delete expired bet {}", bet_id);
         }
     }
 
