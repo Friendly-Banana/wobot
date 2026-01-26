@@ -1,5 +1,6 @@
 use poise::serenity_prelude::{
-    ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, UserId,
+    ChannelId, Context, CreateAllowedMentions, CreateMessage, Mentionable, MessageReference,
+    MessageReferenceKind, UserId,
 };
 use sqlx::PgPool;
 use std::time::Duration;
@@ -103,19 +104,15 @@ async fn process_expired_bets(ctx: &Context, database: &PgPool) -> anyhow::Resul
             .all_roles(false)
             .all_users(true);
 
-        let mut msg = CreateMessage::new()
+        let msg = CreateMessage::new()
             .content(pings_text)
             .embed(embed)
-            .allowed_mentions(allowed_mentions);
-
-        match channel.message(ctx, original_msg_id).await {
-            Ok(original_msg) => {
-                msg = msg.reference_message(&original_msg);
-            }
-            Err(_) => {
-                debug!("Original bet message not found, sending regular message");
-            }
-        }
+            .allowed_mentions(allowed_mentions)
+            .reference_message(
+                MessageReference::new(MessageReferenceKind::Default, channel)
+                    .message_id(original_msg_id)
+                    .fail_if_not_exists(false),
+            );
 
         if let Err(e) = channel.send_message(ctx, msg).await {
             error!(error = ?e, "Failed to send bet expiration message");

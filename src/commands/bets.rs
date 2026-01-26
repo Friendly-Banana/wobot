@@ -1,11 +1,13 @@
+use crate::commands::utils::{parse_duration_or_date, random_color};
 use crate::{Context, UserError};
 use chrono::{DateTime, Utc};
 use poise::CreateReply;
-use poise::serenity_prelude::{ChannelId, Mentionable, MessageId, UserId};
+use poise::serenity_prelude::*;
 use sqlx::{query, query_as};
 
 #[poise::command(
     slash_command,
+    guild_only,
     subcommands("create", "join", "watch", "status", "list"),
     category = "Betting"
 )]
@@ -17,24 +19,16 @@ pub async fn bet(_ctx: Context<'_>) -> Result<(), anyhow::Error> {
 #[poise::command(slash_command)]
 pub async fn create(
     ctx: Context<'_>,
-    #[description = "What is the bet about?"] description: String,
-    #[description = "Your pick/reasoning for this bet (max 100 chars)"] comment: String,
+    #[description = "What is the bet about?"]
+    #[max_length = 2000]
+    description: String,
+    #[description = "Your pick/reasoning for this bet"]
+    #[max_length = 100]
+    comment: String,
     #[description = "How long until it expires? (datetime or duration)"] duration: String,
     #[description = "Users to ping (optional)"] pings: Option<String>,
 ) -> Result<(), anyhow::Error> {
-    if description.len() > 2000 {
-        return Err(UserError::err(
-            "Description is too long (max 2000 characters).",
-        ));
-    }
-
-    if comment.len() > 100 {
-        return Err(UserError::err(
-            "Pick/reasoning is too long (max 100 characters).",
-        ));
-    }
-
-    let expiry = crate::commands::utils::parse_duration_or_date(Utc::now(), &duration).await?;
+    let expiry = parse_duration_or_date(Utc::now(), &duration).await?;
     if expiry <= Utc::now() {
         return Err(UserError::err("Expiry cannot be in the past."));
     }
@@ -46,11 +40,10 @@ pub async fn create(
 
     let author_id = ctx.author().id.get() as i64;
     let channel_id = ctx.channel_id().get() as i64;
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-
-    if guild_id == 0 {
-        return Err(UserError::err("Bets can only be created in servers."));
-    }
+    let guild_id = ctx
+        .guild_id()
+        .map(|id| id.get() as i64)
+        .expect("guild_only");
 
     let mut attempts = 0;
     let max_attempts = 3;
@@ -69,7 +62,6 @@ pub async fn create(
 
         let current_short_id = next_id_row.next_id.unwrap_or(1);
 
-        // Try insert bet
         let bet_row = sqlx::query!(
             "INSERT INTO bets (guild_id, bet_short_id, channel_id, message_id, author_id, description, expiry) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
             guild_id,
@@ -120,7 +112,7 @@ pub async fn create(
         ));
     }
 
-    let mut embed = build_bet_embed(
+    let embed = build_bet_embed(
         bet_short_id,
         &description,
         expiry,
@@ -131,23 +123,21 @@ pub async fn create(
         }],
     );
 
-    if let Some(ref p) = pings {
-        embed = embed.field("Attention", p, false);
-    }
-
-    let allowed_mentions = poise::serenity_prelude::CreateAllowedMentions::new()
+    let allowed_mentions = CreateAllowedMentions::new()
         .everyone(false)
         .all_roles(false)
         .all_users(true);
 
-    let handle = ctx
-        .send(
-            CreateReply::default()
-                .embed(embed)
-                .allowed_mentions(allowed_mentions)
-                .reply(true),
-        )
-        .await?;
+    let mut reply = CreateReply::default()
+        .embed(embed)
+        .allowed_mentions(allowed_mentions)
+        .reply(true);
+
+    if let Some(pings) = pings {
+        reply = reply.content(pings);
+    }
+
+    let handle = ctx.send(reply).await?;
     let message = handle.message().await?;
     let message_id = message.id.get() as i64;
 
@@ -166,15 +156,11 @@ pub async fn create(
 #[poise::command(slash_command)]
 pub async fn join(
     ctx: Context<'_>,
-    #[description = "Your pick/reasoning for this bet (max 100 chars)"] comment: String,
+    #[description = "Your pick/reasoning for this bet"]
+    #[max_length = 100]
+    comment: String,
     #[description = "Bet ID (optional, defaults to last bet in channel)"] bet_id: Option<i32>,
 ) -> Result<(), anyhow::Error> {
-    if comment.len() > 100 {
-        return Err(UserError::err(
-            "Pick/reasoning is too long (max 100 characters).",
-        ));
-    }
-
     let bet = find_bet(ctx, bet_id).await?;
     let user_id_i64 = ctx.author().id.get() as i64;
 
@@ -224,7 +210,7 @@ pub async fn join(
 
     ctx.send(
         CreateReply::default().embed(
-            poise::serenity_prelude::CreateEmbed::new()
+            CreateEmbed::new()
                 .title("Joined Bet")
                 .description(format!(
                     "{} joined the bet #{}: **{}**\n\n[Jump to Bet]({})",
@@ -233,14 +219,14 @@ pub async fn join(
                     bet.description,
                     link
                 ))
-                .color(poise::serenity_prelude::Color::DARK_GREEN),
+                .color(Color::DARK_GREEN),
         ),
     )
     .await?;
     Ok(())
 }
 
-/// Watch a bet (get notified but not a participant)
+/// Watch a bet (get notified when it expires)
 #[poise::command(slash_command)]
 pub async fn watch(
     ctx: Context<'_>,
@@ -280,7 +266,7 @@ pub async fn watch(
     }
 
     query!(
-        "INSERT INTO bet_participants (bet_id, user_id, status, comment) VALUES ($1, $2, 'watching', '') ON CONFLICT (bet_id, user_id) DO UPDATE SET status = 'watching'",
+        "INSERT INTO bet_participants (bet_id, user_id, status, comment) VALUES ($1, $2, 'watching', '')",
         bet.id,
         user_id_i64
     )
@@ -302,13 +288,13 @@ pub async fn watch(
     ctx.send(
         CreateReply::default()
             .embed(
-                poise::serenity_prelude::CreateEmbed::new()
+                CreateEmbed::new()
                     .title("Watching Bet")
                     .description(format!(
                         "You are now watching the bet #{}: **{}**",
                         bet.bet_short_id, bet.description
                     ))
-                    .color(poise::serenity_prelude::Color::BLUE),
+                    .color(Color::BLUE),
             )
             .ephemeral(true),
     )
@@ -364,13 +350,13 @@ pub async fn status(
 /// List all active bets in this server
 #[poise::command(slash_command)]
 pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-    if guild_id == 0 {
-        return Err(UserError::err("Bets only work in servers"));
-    }
+    let guild_id = ctx
+        .guild_id()
+        .map(|id| id.get() as i64)
+        .expect("guild_only");
 
     let bets = query!(
-        "SELECT bet_short_id, description, expiry, channel_id, message_id FROM bets WHERE guild_id = $1 ORDER BY expiry ASC LIMIT 25",
+        "SELECT bet_short_id, description, expiry, channel_id, message_id FROM bets WHERE guild_id = $1 ORDER BY expiry LIMIT 25",
         guild_id
     )
     .fetch_all(&ctx.data().database)
@@ -386,9 +372,9 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
         return Ok(());
     }
 
-    let mut embed = poise::serenity_prelude::CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title("Active Bets")
-        .color(crate::commands::utils::random_color());
+        .color(random_color());
 
     for bet in bets {
         let link = format!(
@@ -396,10 +382,10 @@ pub async fn list(ctx: Context<'_>) -> Result<(), anyhow::Error> {
             guild_id, bet.channel_id, bet.message_id
         );
         let desc = format!(
-            "[{}]({}) (Ends <t:{}:R>)",
+            "[{}]({}) (Ends {})",
             bet.description,
             link,
-            bet.expiry.timestamp()
+            FormattedTimestamp::from(Timestamp::from(bet.expiry))
         );
 
         embed = embed.field(format!("ID: {}", bet.bet_short_id), desc, false);
@@ -428,10 +414,10 @@ async fn find_bet(
     ctx: Context<'_>,
     bet_short_id_opt: Option<i32>,
 ) -> Result<BetData, anyhow::Error> {
-    let guild_id = ctx.guild_id().map(|id| id.get() as i64).unwrap_or(0);
-    if guild_id == 0 {
-        return Err(UserError::err("Bets only work in servers"));
-    }
+    let guild_id = ctx
+        .guild_id()
+        .map(|id| id.get() as i64)
+        .expect("guild_only");
 
     if let Some(short_id) = bet_short_id_opt {
         let record = query_as!(
@@ -463,7 +449,7 @@ fn build_bet_embed(
     description: &str,
     expiry: DateTime<Utc>,
     participants: &[Participant],
-) -> poise::serenity_prelude::CreateEmbed {
+) -> CreateEmbed {
     let mut accepted = Vec::new();
     let mut watching = Vec::new();
 
@@ -482,11 +468,11 @@ fn build_bet_embed(
         }
     }
 
-    let mut embed = poise::serenity_prelude::CreateEmbed::new()
+    let mut embed = CreateEmbed::new()
         .title(format!("Bet #{}", short_id))
         .description(description)
-        .color(crate::commands::utils::random_color())
-        .footer(poise::serenity_prelude::CreateEmbedFooter::new(format!(
+        .color(random_color())
+        .footer(CreateEmbedFooter::new(format!(
             "Join this bet with /bet join <reasoning> {}",
             short_id
         )));
@@ -565,11 +551,7 @@ async fn update_bet_message(ctx: Context<'_>, bet_id: i32) -> anyhow::Result<()>
     );
 
     channel_id
-        .edit_message(
-            ctx,
-            message_id,
-            poise::serenity_prelude::EditMessage::new().embed(embed),
-        )
+        .edit_message(ctx, message_id, EditMessage::new().embed(embed))
         .await?;
 
     Ok(())
