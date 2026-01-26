@@ -239,7 +239,7 @@ async fn get_menu(
 ) -> anyhow::Result<(Canteen, WeekMenu, DateTime<Tz>)> {
     let canteen_id = canteen_name
         .as_deref()
-        .map_or("Mensa Garching".to_string(), normalize);
+        .map_or(normalize("Mensa Garching"), normalize);
     let canteen = get_canteens()
         .await?
         .into_iter()

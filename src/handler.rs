@@ -32,8 +32,10 @@ pub(crate) async fn event_handler(
             if let Some(guild) = new.guild_id {
                 let switched_channel = old.as_ref().is_some_and(|old| old.channel_id.is_some());
                 let user_has_entry_sound = data.entry_sounds.contains_key(&new.user_id);
-                if new.channel_id.is_some() && !switched_channel && user_has_entry_sound {
-                    let channel = new.channel_id.unwrap();
+                if let Some(channel) = new.channel_id
+                    && !switched_channel
+                    && user_has_entry_sound
+                {
                     let sound = data.entry_sounds.get(&new.user_id).unwrap().clone();
                     let file = File::new(PathBuf::from(sound));
                     let manager = songbird::get(ctx).await.expect("Songbird initialized");
