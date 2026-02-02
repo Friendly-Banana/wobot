@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE birthdays SET last_congratulated = $1::date\n         WHERE (last_congratulated IS NULL OR last_congratulated < $1::date)\n         AND ((EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM $1::timestamptz)\n             AND EXTRACT(DAY FROM birthday) = EXTRACT(DAY FROM $1::timestamptz))\n           OR -- handle February 29\n            (EXTRACT(MONTH FROM birthday) = 2\n            AND EXTRACT(DAY FROM birthday) = 29\n            AND EXTRACT(MONTH FROM $1::timestamptz) = 3 -- on March 1\n            AND EXTRACT(DAY FROM $1::timestamptz) = 1\n            AND EXTRACT(DAY FROM ($1::timestamptz - INTERVAL '1 day')) = 28) -- in non leap years\n         )\n         RETURNING guild_id, user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "guild_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "067da09c3d14ef8d6bed4ceb9d65da674814fb9df82522c7fbe83efb05af9147"
+}

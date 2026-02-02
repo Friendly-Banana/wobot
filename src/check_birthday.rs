@@ -17,11 +17,11 @@ pub(crate) fn check_birthdays(
             error!(error = ?err, "Failed checking birthdays");
         }
 
-        // run shortly after midnight
-        let now_utc = Utc::now().with_timezone(&TIMEZONE);
-        let tomorrow = now_utc + Duration::days(1);
-        let after_midnight = tomorrow.date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let until = after_midnight.signed_duration_since(now_utc.naive_local());
+        // run at local midnight
+        let local_now = Utc::now().with_timezone(&TIMEZONE);
+        let tomorrow = local_now + Duration::days(1);
+        let midnight = tomorrow.date_naive().and_hms_opt(0, 0, 0).unwrap();
+        let until = midnight.signed_duration_since(local_now.naive_local());
         let instant = Instant::now() + until.to_std().unwrap();
 
         let mut interval = interval_at(instant, ONE_DAY);
@@ -43,11 +43,24 @@ async fn send_birthdays(
     event_channel: &HashMap<GuildId, ChannelId>,
 ) -> anyhow::Result<()> {
     let _ = span!(Level::DEBUG, "Sending birthday wishes").enter();
+    let local_now = Utc::now().with_timezone(&TIMEZONE);
     let due = query!(
-        "UPDATE birthdays SET last_congratulated = current_date WHERE birthday + ((DATE_PART('year', current_date) - DATE_PART('year', birthday)) || ' years')::interval = current_date AND (last_congratulated IS NULL OR last_congratulated < current_date) RETURNING guild_id, user_id"
+        "UPDATE birthdays SET last_congratulated = $1::date
+         WHERE (last_congratulated IS NULL OR last_congratulated < $1::date)
+         AND ((EXTRACT(MONTH FROM birthday) = EXTRACT(MONTH FROM $1::timestamptz)
+             AND EXTRACT(DAY FROM birthday) = EXTRACT(DAY FROM $1::timestamptz))
+           OR -- handle February 29
+            (EXTRACT(MONTH FROM birthday) = 2
+            AND EXTRACT(DAY FROM birthday) = 29
+            AND EXTRACT(MONTH FROM $1::timestamptz) = 3 -- on March 1
+            AND EXTRACT(DAY FROM $1::timestamptz) = 1
+            AND EXTRACT(DAY FROM ($1::timestamptz - INTERVAL '1 day')) = 28) -- in non leap years
+         )
+         RETURNING guild_id, user_id",
+        local_now.date_naive()
     )
-        .fetch_all(database)
-        .await?;
+    .fetch_all(database)
+    .await?;
     debug!(?due, "Fetched due wishes");
 
     let mut guild_users: HashMap<GuildId, Vec<UserId>> = HashMap::new();
