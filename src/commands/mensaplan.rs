@@ -134,10 +134,7 @@ pub(crate) async fn add(
             let group = send_with_auth(
                 ctx,
                 HTTP_CLIENT
-                    .post(format!(
-                        "{}/groups/server/{}",
-                        MENSA_PLAN_API, new_group.server_id
-                    ))
+                    .post(format!("{}/groups", MENSA_PLAN_API,))
                     .json(&json!({"group": new_group})),
             )
             .await?
