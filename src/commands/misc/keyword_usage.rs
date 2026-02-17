@@ -5,9 +5,9 @@ use sqlx::query;
 
 use crate::Context;
 
-/// Show the amount of keyword usages
-#[poise::command(slash_command, prefix_command)]
-pub(crate) async fn keyword_statistics(ctx: Context<'_>, keyword: String) -> anyhow::Result<()> {
+/// Show keyword usage statistics
+#[poise::command(slash_command, prefix_command, aliases("kw"))]
+pub(crate) async fn keyword_usage(ctx: Context<'_>, keyword: String) -> anyhow::Result<()> {
     ctx.defer().await?;
     let stats = query!("SELECT user_id, SUM(count)::int AS count FROM auto_replies WHERE keyword ILIKE '%' || $1 || '%' GROUP BY user_id", keyword)
         .fetch_all(&ctx.data().database)

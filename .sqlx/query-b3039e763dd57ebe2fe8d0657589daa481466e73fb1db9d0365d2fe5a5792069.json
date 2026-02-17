@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO emoji_usage (guild_id, emoji_id, count) VALUES ($1, $2, 1)\n         ON CONFLICT (guild_id, emoji_id) DO UPDATE SET count = emoji_usage.count + 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b3039e763dd57ebe2fe8d0657589daa481466e73fb1db9d0365d2fe5a5792069"
+}

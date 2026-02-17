@@ -142,6 +142,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, any
             Module::Utility => vec![
                 clear(),
                 emoji(),
+                emoji_usage(),
                 features(),
                 embed(),
                 reminder(),
@@ -150,14 +151,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, any
                 music(),
             ],
             Module::Events => vec![event(), export_events(), reaction_role(), birthday()],
-            Module::Misc => vec![
-                boop(),
-                keyword_statistics(),
-                uwu(),
-                uwu_text(),
-                ping(),
-                man(),
-            ],
+            Module::Misc => vec![boop(), keyword_usage(), uwu(), uwu_text(), ping(), man()],
         });
     }
     commands

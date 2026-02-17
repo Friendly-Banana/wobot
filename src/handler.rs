@@ -1,6 +1,6 @@
 #[cfg(feature = "activity")]
 use crate::CacheEntry;
-use crate::commands::{change_reaction_role, track_song};
+use crate::commands::{change_reaction_role, track_emoji_usage, track_song};
 use crate::constants::HTTP_CLIENT;
 use crate::{Data, UserError};
 use anyhow::anyhow;
@@ -50,13 +50,19 @@ pub(crate) async fn event_handler(
             Ok(())
         }
         FullEvent::ReactionAdd { add_reaction } => {
-            #[cfg(feature = "activity")]
-            if let Some(guild) = add_reaction.guild_id
-                && let Some(user) = add_reaction.user_id
-            {
-                update_activity(data, guild, user).await;
-            }
-            change_reaction_role(ctx, data, add_reaction, true).await
+            let result = tokio::join!(
+                track_emoji_usage(data, add_reaction),
+                change_reaction_role(ctx, data, add_reaction, true),
+                async {
+                    #[cfg(feature = "activity")]
+                    if let Some(guild) = add_reaction.guild_id
+                        && let Some(user) = add_reaction.user_id
+                    {
+                        update_activity(data, guild, user).await
+                    }
+                }
+            );
+            result.0.and(result.1)
         }
         FullEvent::ReactionRemove { removed_reaction } => {
             change_reaction_role(ctx, data, removed_reaction, false).await

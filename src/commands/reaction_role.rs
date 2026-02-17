@@ -1,10 +1,11 @@
+use crate::commands::utils;
 use crate::{Context, Data, done};
 use anyhow::Context as _;
+use poise::serenity_prelude;
 use poise::serenity_prelude::{
-    CacheHttp, ChannelId, EmojiId, GuildId, MESSAGE_CODE_LIMIT, Mentionable, Message, MessageId,
-    Reaction, ReactionCollector, ReactionType, RoleId,
+    CacheHttp, ChannelId, GuildId, Mentionable, Message, MessageId, Reaction, ReactionCollector,
+    ReactionType, RoleId,
 };
-use poise::{CreateReply, serenity_prelude};
 use sqlx::{query, query_as};
 use std::collections::VecDeque;
 use std::time::Duration;
@@ -74,7 +75,7 @@ async fn add_reaction_role(
         reaction
     );
 
-    let emoji_id = get_emoji_id(reaction.clone(), ctx.data()).await?;
+    let emoji_id = utils::get_emoji_id(&reaction, ctx.data()).await?;
     let guild_id = ctx.guild_id().expect("guild_only");
     query!("INSERT INTO reaction_roles (message_id, channel_id, guild_id, role_id, emoji_id) VALUES ($1, $2, $3, $4, $5)",
         message.id.get() as i64, message.channel_id.get() as i64, guild_id.get() as i64, role_id.get() as i64, emoji_id,
@@ -122,7 +123,7 @@ async fn remove_reaction_role(ctx: Context<'_>, reaction: Reaction) -> anyhow::R
             .link(reaction.channel_id, reaction.guild_id),
         reaction.emoji
     );
-    let emoji_id = get_emoji_id(reaction.emoji, ctx.data()).await?;
+    let emoji_id = utils::get_emoji_id(&reaction.emoji, ctx.data()).await?;
     query!(
         "DELETE FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
         reaction.message_id.get() as i64,
@@ -158,7 +159,8 @@ pub(crate) async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
     };
     let mut roles = VecDeque::from(["**Message | Emoji | Role**".to_string()]);
     for reaction_role in reaction_roles {
-        let emoji = get_emoji_from_id(ctx, reaction_role.guild_id, reaction_role.emoji_id).await?;
+        let emoji =
+            utils::get_emoji_from_id(ctx, reaction_role.guild_id, reaction_role.emoji_id).await?;
         let guild = Some(GuildId::new(reaction_role.guild_id as u64));
         let channel_id = reaction_role.channel_id as u64;
         let msg_id = reaction_role.message_id as u64;
@@ -169,71 +171,8 @@ pub(crate) async fn list(ctx: Context<'_>) -> anyhow::Result<()> {
             RoleId::new(reaction_role.role_id as u64).mention()
         ));
     }
-    // split message into in chunks
-    let mut s = roles.pop_front().unwrap();
-    loop {
-        match roles.pop_front() {
-            Some(line) => {
-                // we'll add a newline
-                if line.len() + s.len() + 1 > MESSAGE_CODE_LIMIT {
-                    ctx.reply(s).await?;
-                    s = String::new();
-                }
-                s.push('\n');
-                s.push_str(&line);
-            }
-            None => {
-                ctx.send(CreateReply::default().content(s).ephemeral(show_all_roles))
-                    .await?;
-                break;
-            }
-        }
-    }
+    utils::paginate_text(ctx, &mut roles).await?;
     Ok(())
-}
-
-async fn get_emoji_id(reaction: ReactionType, data: &Data) -> anyhow::Result<i64> {
-    match reaction {
-        ReactionType::Custom { id, .. } => Ok(id.get() as i64),
-        ReactionType::Unicode(unicode) => {
-            query!(
-                "INSERT INTO unicode_to_emoji (unicode) VALUES ($1) ON CONFLICT DO NOTHING",
-                unicode
-            )
-            .execute(&data.database)
-            .await?;
-            let id = query!(
-                "SELECT id FROM unicode_to_emoji WHERE unicode = $1",
-                unicode
-            )
-            .fetch_one(&data.database)
-            .await
-            .context(format!("Emoji {unicode} should have an id now"))?;
-            Ok(id.id)
-        }
-        _ => unimplemented!(),
-    }
-}
-async fn get_emoji_from_id(
-    ctx: Context<'_>,
-    guild_id: i64,
-    emoji_id: i64,
-) -> anyhow::Result<String> {
-    if emoji_id >> 32 == 0 {
-        let emoji = query!(
-            "SELECT unicode FROM unicode_to_emoji WHERE id = $1",
-            emoji_id
-        )
-        .fetch_one(&ctx.data().database)
-        .await
-        .with_context(|| format!("Emoji {emoji_id} should be in the database"))?;
-        return Ok(emoji.unicode);
-    }
-    Ok(GuildId::new(guild_id as u64)
-        .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
-        .await
-        .map(|e| e.to_string())
-        .unwrap_or(emoji_id.to_string()))
 }
 
 pub(crate) async fn change_reaction_role(
@@ -251,7 +190,7 @@ pub(crate) async fn change_reaction_role(
         return Ok(());
     }
 
-    let emoji = get_emoji_id(reaction.emoji.clone(), data).await?;
+    let emoji = utils::get_emoji_id(&reaction.emoji, data).await?;
     let reaction_role = query!(
         "SELECT * FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
         reaction.message_id.get() as i64,

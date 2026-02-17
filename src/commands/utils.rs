@@ -1,14 +1,18 @@
 use crate::constants::{HTTP_CLIENT, ONE_DAY};
-use crate::{Context, UserError};
+use crate::{Context, Data, UserError};
 use anyhow::Context as _;
 use chrono::{DateTime, Utc};
 use image::DynamicImage;
 use image::codecs::png::PngEncoder;
 use mini_moka::sync::Cache;
-use poise::serenity_prelude::{Colour, CreateAttachment, CreateEmbed, User};
+use poise::serenity_prelude::{
+    Colour, CreateAttachment, CreateEmbed, EmojiId, GuildId, MESSAGE_CODE_LIMIT, ReactionType, User,
+};
 use poise::{CreateReply, ReplyHandle};
 use rand::prelude::IndexedRandom;
 use rand::rng;
+use sqlx::query;
+use std::collections::VecDeque;
 use std::sync::LazyLock;
 use tokio::process::Command;
 
@@ -110,6 +114,74 @@ pub async fn send_image(
 
     ctx.send(CreateReply::default().attachment(CreateAttachment::bytes(output_bytes, filename)))
         .await?;
+    Ok(())
+}
+
+pub async fn get_emoji_id(reaction: &ReactionType, data: &Data) -> anyhow::Result<i64> {
+    match reaction {
+        ReactionType::Custom { id, .. } => Ok(id.get() as i64),
+        ReactionType::Unicode(unicode) => {
+            query!(
+                "INSERT INTO unicode_to_emoji (unicode) VALUES ($1) ON CONFLICT DO NOTHING",
+                unicode
+            )
+            .execute(&data.database)
+            .await?;
+            let id = query!(
+                "SELECT id FROM unicode_to_emoji WHERE unicode = $1",
+                unicode
+            )
+            .fetch_one(&data.database)
+            .await
+            .context(format!("Emoji {unicode} should have an id now"))?;
+            Ok(id.id)
+        }
+        _ => unimplemented!(),
+    }
+}
+
+pub async fn get_emoji_from_id(
+    ctx: Context<'_>,
+    guild_id: i64,
+    emoji_id: i64,
+) -> anyhow::Result<String> {
+    if emoji_id >> 32 == 0 {
+        let emoji = query!(
+            "SELECT unicode FROM unicode_to_emoji WHERE id = $1",
+            emoji_id
+        )
+        .fetch_one(&ctx.data().database)
+        .await
+        .with_context(|| format!("Emoji {emoji_id} should be in the database"))?;
+        return Ok(emoji.unicode);
+    }
+    Ok(GuildId::new(guild_id as u64)
+        .emoji(ctx.http(), EmojiId::new(emoji_id as u64))
+        .await
+        .map(|e| e.to_string())
+        .unwrap_or(emoji_id.to_string()))
+}
+
+/// Split text into multiple messages to stay under Discord's limit
+pub async fn paginate_text(ctx: Context<'_>, lines: &mut VecDeque<String>) -> anyhow::Result<()> {
+    let mut s = lines.pop_front().unwrap();
+    loop {
+        match lines.pop_front() {
+            Some(line) => {
+                // we'll add a newline
+                if line.len() + s.len() + 1 > MESSAGE_CODE_LIMIT {
+                    ctx.reply(&s).await?;
+                    s = String::new();
+                }
+                s.push('\n');
+                s.push_str(&line);
+            }
+            None => {
+                ctx.send(CreateReply::default().content(s)).await?;
+                break;
+            }
+        }
+    }
     Ok(())
 }
 
