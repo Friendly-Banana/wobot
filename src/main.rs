@@ -1,3 +1,5 @@
+extern crate core;
+
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt::Debug;

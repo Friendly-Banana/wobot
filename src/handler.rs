@@ -51,7 +51,7 @@ pub(crate) async fn event_handler(
         }
         FullEvent::ReactionAdd { add_reaction } => {
             let result = tokio::join!(
-                track_emoji_usage(data, add_reaction),
+                track_emoji_usage(data, add_reaction, true),
                 change_reaction_role(ctx, data, add_reaction, true),
                 async {
                     #[cfg(feature = "activity")]
@@ -65,7 +65,11 @@ pub(crate) async fn event_handler(
             result.0.and(result.1)
         }
         FullEvent::ReactionRemove { removed_reaction } => {
-            change_reaction_role(ctx, data, removed_reaction, false).await
+            let result = tokio::join!(
+                change_reaction_role(ctx, data, removed_reaction, false),
+                track_emoji_usage(data, removed_reaction, false),
+            );
+            result.0.and(result.1)
         }
         FullEvent::Message { new_message } => {
             if new_message.author.bot {

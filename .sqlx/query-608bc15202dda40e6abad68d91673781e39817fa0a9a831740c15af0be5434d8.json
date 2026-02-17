@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE emoji_usage SET count = count - 1 WHERE guild_id = $1 AND emoji = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "608bc15202dda40e6abad68d91673781e39817fa0a9a831740c15af0be5434d8"
+}

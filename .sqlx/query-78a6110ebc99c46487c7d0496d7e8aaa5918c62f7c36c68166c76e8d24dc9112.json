@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT * FROM reaction_roles WHERE message_id = $1 AND emoji_id = $2",
+  "query": "SELECT * FROM reaction_roles WHERE message_id = $1 AND emoji = $2",
   "describe": {
     "columns": [
       {
@@ -25,14 +25,14 @@
       },
       {
         "ordinal": 4,
-        "name": "emoji_id",
-        "type_info": "Int8"
+        "name": "emoji",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Int8",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "222f83dc763fa3e9d7aa52da508b9c0cf1112ba7400b81c3c4183979a419fc3f"
+  "hash": "78a6110ebc99c46487c7d0496d7e8aaa5918c62f7c36c68166c76e8d24dc9112"
 }

@@ -10,13 +10,13 @@
       },
       {
         "ordinal": 1,
-        "name": "emoji_id",
+        "name": "count",
         "type_info": "Int8"
       },
       {
         "ordinal": 2,
-        "name": "count",
-        "type_info": "Int8"
+        "name": "emoji",
+        "type_info": "Text"
       }
     ],
     "parameters": {
