@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT substring(emoji FROM '<a?:[A-Za-z0-9_]+:(\\d+)>')::bigint AS \"emoji_id!\"\n           FROM emoji_usage\n           WHERE guild_id = $1 AND count > 0 AND position(':' in emoji) > 0",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "emoji_id!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6d1987409ffa199c3b6878933fb6e6318526b3a89a636458839af9cb94ac113b"
+}

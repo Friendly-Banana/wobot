@@ -139,14 +139,14 @@ pub async fn paginate_text(ctx: Context<'_>, lines: &mut VecDeque<String>) -> an
             Some(line) => {
                 // +1 for the newline
                 if line.len() + 1 + s.len() > MESSAGE_CODE_LIMIT {
-                    ctx.reply(&s).await?;
+                    ctx.reply(s).await?;
                     s = String::new();
                 }
                 s.push('\n');
                 s.push_str(&line);
             }
             None => {
-                ctx.send(CreateReply::default().content(s)).await?;
+                ctx.reply(s).await?;
                 break;
             }
         }

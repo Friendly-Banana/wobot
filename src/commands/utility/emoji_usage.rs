@@ -1,8 +1,9 @@
 use crate::commands::utils;
 use crate::{Context, Data};
+use itertools::Itertools;
 use poise::serenity_prelude::{GuildId, Reaction};
 use sqlx::{query, query_as};
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use tracing::warn;
 
 /// List emoji usage statistics for a guild
@@ -25,6 +26,42 @@ pub(crate) async fn emoji_usage(ctx: Context<'_>, guild_id: Option<GuildId>) -> 
     for stat in emoji_stats {
         lines.push_back(format!("{} {}", stat.emoji, stat.count));
     }
+    utils::paginate_text(ctx, &mut lines).await?;
+    Ok(())
+}
+
+/// List unused emojis in a guild
+#[poise::command(slash_command, prefix_command, guild_only)]
+pub(crate) async fn emoji_unused(
+    ctx: Context<'_>,
+    guild_id: Option<GuildId>,
+) -> anyhow::Result<()> {
+    ctx.defer().await?;
+    let guild_id = guild_id.unwrap_or(ctx.guild_id().expect("guild_only"));
+
+    let used_custom_emoji_ids = query!(
+        r#"SELECT substring(emoji FROM '<a?:[A-Za-z0-9_]+:(\d+)>')::bigint AS "emoji_id!"
+           FROM emoji_usage
+           WHERE guild_id = $1 AND count > 0 AND position(':' in emoji) > 0"#,
+        guild_id.get() as i64
+    )
+    .fetch_all(&ctx.data().database)
+    .await?
+    .into_iter()
+    .map(|row| row.emoji_id as u64)
+    .collect::<HashSet<_>>();
+
+    let guild_emojis = guild_id.emojis(ctx).await?;
+    let mut lines: VecDeque<_> = guild_emojis
+        .into_iter()
+        .filter(|e| !used_custom_emoji_ids.contains(&e.id.get()))
+        .map(|e| e.to_string())
+        .chunks(15)
+        .into_iter()
+        .map(|mut chunk| chunk.join(" "))
+        .collect();
+    lines.push_front("Unused emojis".to_string());
+
     utils::paginate_text(ctx, &mut lines).await?;
     Ok(())
 }

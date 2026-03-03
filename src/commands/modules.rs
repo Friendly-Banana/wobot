@@ -143,6 +143,7 @@ pub(crate) fn get_active_commands(modules: Vec<Module>) -> Vec<Command<Data, any
                 clear(),
                 emoji(),
                 emoji_usage(),
+                emoji_unused(),
                 features(),
                 embed(),
                 reminder(),
