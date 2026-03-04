@@ -54,7 +54,8 @@ pub(crate) async fn emoji_unused(
     let guild_emojis = guild_id.emojis(ctx).await?;
     let mut lines: VecDeque<_> = guild_emojis
         .into_iter()
-        .filter(|e| !used_custom_emoji_ids.contains(&e.id.get()))
+        .filter(|e| e.available && !used_custom_emoji_ids.contains(&e.id.get()))
+        .sorted_by(|a, b| Ord::cmp(&b.animated, &a.animated))
         .map(|e| e.to_string())
         .chunks(15)
         .into_iter()
